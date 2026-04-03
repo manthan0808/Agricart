@@ -10,14 +10,22 @@ $db_user = getenv('DB_USER') ?: 'postgres';
 $db_pass = getenv('DB_PASS') ?: 'Q7KnsSrYSAvKEcPC';
 $db_type = getenv('DB_TYPE') ?: 'pgsql'; // Default to pgsql for Supabase
 
+// Try connecting using a full DATABASE_URL (for cloud deployment)
+$database_url = getenv('DATABASE_URL');
+
 try {
-    if ($db_type === 'pgsql') {
-        $dsn = "pgsql:host=$db_host;port=$db_port;dbname=$db_name";
+    if ($database_url) {
+        $conn = new PDO($database_url);
     } else {
-        $dsn = "mysql:host=$db_host;dbname=$db_name";
+        // Fallback for local development or individual variables
+        if ($db_type === 'pgsql') {
+            $dsn = "pgsql:host=$db_host;port=$db_port;dbname=$db_name;sslmode=require";
+        } else {
+            $dsn = "mysql:host=$db_host;dbname=$db_name";
+        }
+        $conn = new PDO($dsn, $db_user, $db_pass);
     }
-    
-    $conn = new PDO($dsn, $db_user, $db_pass);
+
     // Set the PDO error mode to exception
     $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
