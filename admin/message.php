@@ -2,11 +2,14 @@
 include ("../database/connection.php");
 include ("../session/session_start.php");
 include("../session/session_check.php");
-// $query = "SELECT contact_details.*, buyer_details.first_name AS buyer_name FROM contact_details
-//           LEFT JOIN buyer_details ON contact_details.buyer_id = buyer_details.buyer_id";
-$query = "select* from contact_details";
-$result = mysqli_query($conn, $query);
 
+$messages = [];
+try {
+    $stmt = $conn->query("SELECT * FROM contact_details ORDER BY created_on DESC");
+    $messages = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 
 <!DOCTYPE html>
@@ -28,7 +31,7 @@ $result = mysqli_query($conn, $query);
             <div class="header-title-wrapper">
                 <div class="header-title">
                     <h1>Messages</h1>
-                    <p>Display Messages From Sellers and Buyers<span class="las la-chart-lin"></span></p>
+                    <p>Display Messages From Sellers and Buyers <span class="las la-chart-lin"></span></p>
                 </div>
             </div>
         </header>
@@ -39,8 +42,7 @@ $result = mysqli_query($conn, $query);
                 <div class="head">
             <h3>Total Message</h3>
             <form id="download">
-                <!-- Move the download button inside the table head -->
-                <button onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
+                <button type="button" onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
             </form>
         </div>
                     <section>
@@ -49,8 +51,8 @@ $result = mysqli_query($conn, $query);
                                 <table id="table">
                                     <thead>
                                         <tr>
-                                            <th>#ID</th>
-                                            <th>Buyer Name</th>
+                                            <th>Sr.no</th>
+                                            <th>Name</th>
                                             <th>Status</th>
                                             <th>Created On</th>
                                             <th>Tools</th>
@@ -58,20 +60,21 @@ $result = mysqli_query($conn, $query);
                                     </thead>
                                     <tbody>
                                         <?php 
-                                        if (mysqli_num_rows($result) > 0) {
-                                        while($row = mysqli_fetch_assoc($result)){
+                                        $counter = 1;
+                                        if (!empty($messages)) {
+                                            foreach ($messages as $row) {
                                         ?>
                                             <tr>
-                                                <td><?php echo $row['contact_id'];?></td>
-                                                <td><?php echo $row['buyer_name'];?></td>
-                                                <td class="status" >
-                                                    <div class="status_inner_div"  style="background-color: <?php echo ($row['status'] == 0) ? 'red' : 'green'; ?>;">
+                                                <td><?php echo $counter++;?></td>
+                                                <td><?php echo htmlspecialchars($row['buyer_name'] ?? '');?></td>
+                                                <td class="status">
+                                                    <div class="status_inner_div" style="background-color: <?php echo ($row['status'] == 0) ? 'red' : 'green'; ?>;">
                                                         <span><?php echo ($row['status'] == 0) ? 'New' : 'Viewed'; ?></span>
                                                     </div>
                                                 </td>
-                                                <td><?php echo $row['created_on'];?></td>
+                                                <td><?php echo $row['created_on'] ?? '';?></td>
                                                 <td>
-                                                    <button onclick="openPopup('<?php echo $row['contact_id']; ?>')"><i class="fa-solid fa-magnifying-glass"></i> Views</button>
+                                                    <button onclick="openPopup('<?php echo $row['contact_id']; ?>')"><i class="fa-solid fa-magnifying-glass"></i> View</button>
                                                     <div class="overlay" id="overlay_<?php echo $row['contact_id']; ?>">
                                                         <div class="popup">
                                                             <span class="close-btn" onclick="closePopup('<?php echo $row['contact_id']; ?>')">×</span>
@@ -79,63 +82,52 @@ $result = mysqli_query($conn, $query);
                                                             <form>
                                                             <div style="max-height: 400px; overflow-y: auto;">
                                                                 <table id="a">
-                                                                    <!-- Include other details as needed -->
                                                                     <tr>
-                                                                        <td>Contact ID</td>
+                                                                        <td>Name</td>
                                                                         <td>
-                                                                            <div id="contactIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['contact_id']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['buyer_name'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
-                                                                        <td>Buyer Name</td>
+                                                                        <td>Email</td>
                                                                         <td>
-                                                                            <div id="buyerIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['buyer_name']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['email'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
-                                                                        <td>Buyer email</td>
+                                                                        <td>Message</td>
                                                                         <td>
-                                                                            <div id="buyeremailDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['email']; ?></div>
-                                                                        </td>
-                                                                    </tr>
-                                                                    <tr>
-                                                                        <td>Description</td>
-                                                                        <td>
-                                                                            <div class="details-display" id="descriptionDisplay">
-                                                                                <?php echo $row['message']; ?>
+                                                                            <div class="details-display" style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 100px; white-space: pre-wrap;">
+                                                                                <?php echo htmlspecialchars($row['message'] ?? ''); ?>
                                                                             </div>
                                                                         </td>
                                                                     </tr>
-                                                                    
                                                                     <tr>
                                                                         <td>Status</td>
-                                                                        <td class="status" >
-                                                    <div class="status_inner_div"  style="background-color: <?php echo ($row['status'] == 0) ? 'red' : 'green'; ?>;">
-                                                        <span><?php echo ($row['status'] == 0) ? 'New' : 'Viewed'; ?></span>
-                                                    </div>
-                                                </td>
+                                                                        <td class="status">
+                                                                            <div class="status_inner_div" style="background-color: <?php echo ($row['status'] == 0) ? 'red' : 'green'; ?>; display: inline-block;">
+                                                                                <span><?php echo ($row['status'] == 0) ? 'New' : 'Viewed'; ?></span>
+                                                                            </div>
+                                                                        </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Created On</td>
                                                                         <td>
-                                                                            <div id="createdonDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['created_on']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo $row['created_on'] ?? ''; ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
+                                                                        <td></td>
                                                                         <td>
-                                                                        </td>
-                                                                        <td id="mark">
                                                                         <?php
                                                                             if ($row['status'] == 0) {
-                                                                                // Display Deactivate button
-                                                                                echo '<a href="mark_read_message.php?contact_id=' . $row['contact_id'] . '" class="mark-as-read"> Mark as read</a>';
+                                                                                echo '<a href="mark_read_message.php?contact_id=' . $row['contact_id'] . '" class="mark-as-read" style="text-decoration: none; background: #007bff; color: white; padding: 8px 12px; border-radius: 4px;"> Mark as read</a>';
                                                                             }
                                                                         ?> 
-                                                                        
                                                                         </td>
-                                                                        
                                                                     </tr>
                                                                 </table>
+                                                            </div>
                                                             </form>
                                                         </div>
                                                     </div>
@@ -145,7 +137,7 @@ $result = mysqli_query($conn, $query);
                                             }
                                         } else {?>
                                             <tr>
-                                                <td colspan="6">
+                                                <td colspan="5">
                                                     <p class='no-data-found'>No message data found.</p>
                                                 </td>
                                             </tr>
@@ -171,14 +163,9 @@ $result = mysqli_query($conn, $query);
             document.getElementById("overlay_" + contactId).style.display = "none";
         }
         function downloadCSV() {
-    // Open a new window or iframe to trigger the download
-    var downloadWindow = window.open('fetch_details/fetch_message_details.php', '_blank');
-    downloadWindow.focus();
-}
-
-
-
+            var downloadWindow = window.open('fetch_details/fetch_message_details.php', '_blank');
+            downloadWindow.focus();
+        }
     </script>
 </body>
-
 </html>

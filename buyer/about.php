@@ -3,25 +3,24 @@ include ("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
+try {
+    $username = $_SESSION['username'] ?? null;
+    $cart_row = ['product_count' => 0];
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id;
-$cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-$result = $conn->query($cartcount);
-
-// Check if the query executed successfully
-if ($result) {
-    // Fetch the result
-    $row = $result->fetch_assoc();
-}
-
-
-
+    if ($username) {
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        
+        if ($buyer_id_row) {
+            $buyer_id = $buyer_id_row['buyer_id'];
+            $stmt_count = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id");
+            $stmt_count->execute(['id' => $buyer_id]);
+            $cart_row = $stmt_count->fetch();
+        }
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -30,7 +29,7 @@ if ($result) {
     <head>
     <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>AgriCart</title>
+        <title>About Us</title>
         <link rel="stylesheet" href="home.css">
         <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
         <meta name="viewport" content="width=device-width, initial-scale=1 , shrink-to-fit=no">
@@ -56,8 +55,8 @@ if ($result) {
                     <li class="icon">
                         <div class="cart">
                             <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                            <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                            <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
                         </div>
                     </li>
@@ -172,15 +171,8 @@ if ($result) {
         
        </section>
 
-
-       
-
-
         <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
         <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
     </body>
-    <?php
-        // include("newsletter.php");
-        include ("footer.php");
-    ?>
+    <?php include ("footer.php"); ?>
 </html>

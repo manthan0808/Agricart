@@ -5,45 +5,45 @@ include("../database/connection.php");
 
 // Fetch seller ID for the specific user from the database
 $seller_username = $_SESSION['username'];
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-if (!$seller_id_result) {
-    die("Error: " . mysqli_error($conn)); // Add error handling
-}
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+$seller_id = null;
+$total_sales = 0;
+$total_orders = 0;
+$orders = [];
+$seller_photo = null;
 
-$total_sales_query = "SELECT SUM(price * quantity) AS total_sales FROM order_details WHERE seller_id = '$seller_id'";
-$total_sales_result = mysqli_query($conn, $total_sales_query);
-$total_sales_row = mysqli_fetch_assoc($total_sales_result);
-$total_sales = $total_sales_row['total_sales'];
+try {
+    $stmt_seller = $conn->prepare("SELECT seller_id, photo FROM seller_details WHERE email = :email");
+    $stmt_seller->execute(['email' => $seller_username]);
+    $seller_row = $stmt_seller->fetch();
+    
+    if ($seller_row) {
+        $seller_id = $seller_row['seller_id'];
+        $seller_photo = $seller_row['photo'];
 
-// Query to fetch total orders
-$total_orders_query = "SELECT COUNT(*) AS total_orders FROM order_details WHERE seller_id = '$seller_id'";
-$total_orders_result = mysqli_query($conn, $total_orders_query);
-if (!$total_orders_result) {
-    die("Error: " . mysqli_error($conn)); // Add error handling
-}
-$total_orders_row = mysqli_fetch_assoc($total_orders_result);
-$total_orders = $total_orders_row['total_orders'];
+        // Total sales
+        $stmt_total_sales = $conn->prepare("SELECT SUM(price * quantity) AS total_sales FROM order_details WHERE seller_id = :sid");
+        $stmt_total_sales->execute(['sid' => $seller_id]);
+        $total_sales_row = $stmt_total_sales->fetch();
+        $total_sales = $total_sales_row['total_sales'] ?? 0;
 
-$order_query = "SELECT od.quantity, od.price, od.quantity * od.price AS total, pd.name AS product_name, bd.full_name AS buyer_name
-                FROM order_details od
-                INNER JOIN product_details pd ON od.product_id = pd.product_id
-                INNER JOIN buyer_details bd ON od.buyer_id = bd.buyer_id
-                WHERE od.seller_id = '$seller_id'";
-$order_result = mysqli_query($conn, $order_query);
-if (!$order_result) {
-    die("Error: " . mysqli_error($conn)); // Add error handling
-}
-// echo $order_query;
+        // Total orders
+        $stmt_total_orders = $conn->prepare("SELECT COUNT(*) AS total_orders FROM order_details WHERE seller_id = :sid");
+        $stmt_total_orders->execute(['sid' => $seller_id]);
+        $total_orders_row = $stmt_total_orders->fetch();
+        $total_orders = $total_orders_row['total_orders'] ?? 0;
 
-$sql = "SELECT photo FROM seller_details WHERE seller_id = '$seller_id'";
-$result_img = mysqli_query($conn, $sql);
-
-if (mysqli_num_rows($result_img) > 0) {
-    // Fetch photo path
-    $row = mysqli_fetch_assoc($result_img);
+        // Detailed sales info
+        $order_query = "SELECT od.quantity, od.price, (od.quantity * od.price) AS total, pd.name AS product_name, bd.full_name AS buyer_name
+                        FROM order_details od
+                        INNER JOIN product_details pd ON od.product_id = pd.product_id
+                        INNER JOIN buyer_details bd ON od.buyer_id = bd.buyer_id
+                        WHERE od.seller_id = :sid";
+        $stmt_detail = $conn->prepare($order_query);
+        $stmt_detail->execute(['sid' => $seller_id]);
+        $orders = $stmt_detail->fetchAll();
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 
@@ -68,17 +68,16 @@ if (mysqli_num_rows($result_img) > 0) {
             <div class="col-div-6">
                 <span style="font-size:30px;cursor:pointer; color: #000e04;" class="nav"><i
                         class="fa-solid fa-bars"></i> Sales</span>
-                <span style="font-size:30px;cursor:pointer; color: rgb(0, 0, 0);" class="nav2"><i
-                        class="fa-solid fa-bars"></i> Sales</span> <!-- Corrected typo -->
+                <span style="font-size:30px;cursor:pointer; color: rgb(0, 0, 0); display:none;" class="nav2"><i
+                        class="fa-solid fa-bars"></i> Sales</span>
             </div>
             <div class="col-div-6">
             <div class="profile">
                 <?php
-                    $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
+                    $image = empty($seller_photo) ? '../images/profile.jpg' : '../images/' . $seller_photo;
                     echo "<td><img src='$image' class='pro-img'></td>";
                 ?>
-                    <!-- <img src="images/user.png" class="pro-img" /> -->
-                    <p><?php echo $seller_username; ?></p>
+                    <p><?php echo htmlspecialchars($seller_username); ?></p>
                 </div>
             </div>
             <div class="clearfix"></div>
@@ -88,14 +87,14 @@ if (mysqli_num_rows($result_img) > 0) {
         <br />
         <div class="col-div-3">
             <div class="box">
-                <p><?php echo ($total_sales !== null) ? $total_sales : '0'; ?><br /><span>Total Sales</span></p>
+                <p><?php echo number_format($total_sales); ?><br /><span>Total Sales</span></p>
                 <i class="fa-solid fa-cart-shopping"></i>
             </div>
         </div>
 
         <div class="col-div-3">
             <div class="box">
-                <p><?php echo $total_orders; ?><br /><span>Orders</span></p> <!-- Corrected label -->
+                <p><?php echo $total_orders; ?><br /><span>Orders</span></p>
                 <i class="fa fa-list box-icon"></i>
             </div>
         </div>
@@ -105,7 +104,7 @@ if (mysqli_num_rows($result_img) > 0) {
         <div class="col-div-8">
             <div class="box-8">
                 <div class="content">
-                    <h1>Total Sales</h1> <!-- Moved h1 tag outside of the p tag -->
+                    <h1>Total Sales</h1>
                     <br />
                     <table>
                         <tr>
@@ -118,16 +117,20 @@ if (mysqli_num_rows($result_img) > 0) {
                         </tr>
                         <?php
                         $sr_no = 1;
-                        while ($row = mysqli_fetch_assoc($order_result)) {?>
-                            <tr>
-                            <td><?php echo $sr_no++; ?></td>
-                            <td><?php echo $row['product_name']; ?></td>
-                            <td><?php echo $row['buyer_name']; ?></td>
-                            <td><?php echo $row['quantity']; ?></td>
-                            <td><?php echo $row['price']; ?></td>
-                            <td><?php echo $row['total']; ?></td>
-                        </tr>
-                        <?php
+                        if (!empty($orders)) {
+                            foreach ($orders as $row) {?>
+                                <tr>
+                                <td><?php echo $sr_no++; ?></td>
+                                <td><?php echo htmlspecialchars($row['product_name']); ?></td>
+                                <td><?php echo htmlspecialchars($row['buyer_name']); ?></td>
+                                <td><?php echo $row['quantity']; ?></td>
+                                <td><?php echo $row['price']; ?></td>
+                                <td><?php echo number_format($row['total']); ?></td>
+                            </tr>
+                            <?php
+                            }
+                        } else {
+                            echo "<tr><td colspan='6'>No sales data found.</td></tr>";
                         }
                         ?>
                     </table>
@@ -143,30 +146,15 @@ if (mysqli_num_rows($result_img) > 0) {
         $(".nav").click(function () {
             $("#mySidenav").css('width', '70px');
             $("#main").css('margin-left', '70px');
-            $(".logo").css('visibility', 'visible');
-            $(".logo span").css('visibility', 'visible');
-            $(".logo span").css('margin-left', '-10px');
-            $(".icon-a").css('visibility', 'visible');
-            $(".icons").css('visibility', 'visible');
-            $(".icons").css('margin-left', '-8px');
             $(".nav").css('display', 'none');
             $(".nav2").css('display', 'block');
-            $(".img").css('width', '60px');
-            $(".img").css('height', '45px');
-            $(".white").css('color', 'white');
         });
 
         $(".nav2").click(function () {
             $("#mySidenav").css('width', '300px');
             $("#main").css('margin-left', '300px');
-            $(".logo").css('visibility', 'visible');
-            $(".icon-a").css('visibility', 'visible');
-            $(".icons").css('visibility', 'visible');
             $(".nav").css('display', 'block');
             $(".nav2").css('display', 'none');
-            $(".img").css('width', '160px');
-            $(".img").css('height', '110px');
-            $(".white").css('color', '#818181');
         });
     </script>
 </body>

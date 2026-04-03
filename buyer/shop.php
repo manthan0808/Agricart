@@ -3,37 +3,42 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-// Check if a location is entered in the search bar
-if(isset($_GET['location'])) {
-    $search_location = $_GET['location'];
-    // Modify the query to filter results based on the entered location
-    $query = "SELECT * FROM shop_details WHERE city = '$search_location' OR address = '$search_location'";
-} else {
-    // If no location is entered, retrieve all shop details
-    $query = "SELECT * FROM shop_details";
-}
+try {
+    $shops = [];
+    $search_location = null;
 
-$result = mysqli_query($conn, $query);
-
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
-
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id;
-    $cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-    $cartcount_result = $conn->query($cartcount);
-    
-    // Check if the query executed successfully
-    if ($cartcount_result) {
-        // Fetch the result
-        $row = $cartcount_result->fetch_assoc();
+    // Check if a location is entered in the search bar
+    if(isset($_GET['location'])) {
+        $search_location = $_GET['location'];
+        // Modify the query to filter results based on the entered location
+        $query = "SELECT * FROM shop_details WHERE city = :loc OR address = :loc";
+        $stmt_shops = $conn->prepare($query);
+        $stmt_shops->execute(['loc' => $search_location]);
+        $shops = $stmt_shops->fetchAll();
+    } else {
+        // If no location is entered, retrieve all shop details
+        $query = "SELECT * FROM shop_details";
+        $stmt_shops = $conn->query($query);
+        $shops = $stmt_shops->fetchAll();
     }
-    
 
+    $username = $_SESSION['username'] ?? null;
+    $cart_row = ['product_count' => 0];
 
+    if($username) {
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        
+        if ($buyer_id_row) {
+            $buyer_id = $buyer_id_row['buyer_id'];
+            $stmt_count = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id");
+            $stmt_count->execute(['id' => $buyer_id]);
+            $cart_row = $stmt_count->fetch();
+        }
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 
@@ -42,7 +47,7 @@ if(isset($_SESSION['username'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Shops</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1 , shrink-to-fit=no">
@@ -60,8 +65,8 @@ if(isset($_SESSION['username'])) {
             <li class="icon">
                 <div class="cart">
                     <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                    <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                    <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
                 </div>
             </li>
@@ -85,11 +90,9 @@ if(isset($_SESSION['username'])) {
     <section id="search">
         <form method="GET" action="shop.php">
         <button type="submit"><ion-icon name="search-sharp"></ion-icon></button>
-            <input type="text" name="location" placeholder="Search nearby shops by location...">
-            <!-- <button type="submit"><ion-icon name="search-sharp"></ion-icon></button> -->
+            <input type="text" name="location" placeholder="Search nearby shops by location..." value="<?php echo htmlspecialchars($search_location ?? ''); ?>">
         </form>
     </section>
-    
 </center>
 <br><br>
 
@@ -98,66 +101,61 @@ if(isset($_SESSION['username'])) {
 
 <section id="shop-details" class="section-p1">
     <?php
-    if (mysqli_num_rows($result) > 0) {
-        while ($row = mysqli_fetch_assoc($result)) {
-            echo '<div class="outer"><div class="detalis_2">';
-            echo '<h2>' . $row['name'] . '</h2>';
-            echo '<div class="abcd">';
-            echo '<li>';
-            echo '<ion-icon name="map-outline"></ion-icon>';
-            echo '<p>' . $row['address'] . '</p>';
-            echo '</li>';
-            echo '<li>';
-            echo '<ion-icon name="mail-open-outline"></ion-icon>';
-            echo '<p>' . $row['email'] . '</p>'; 
-            echo '</li>';
-            echo '<li>';
-            echo'<ion-icon name="call-outline"></ion-icon>';
-            echo'<p>' . $row['contact_no'] . '</p>';
-            echo'</li>';
-            echo'<li>';
-            echo'<ion-icon name="time-outline"></ion-icon>';
-            echo'<p>' . $row['time'] . '</p>';
-            echo'</li>';
-            echo'<li>';
-            echo'<ion-icon name="person-circle-outline"></ion-icon>';
-            echo'<p>' . $row['contact_person'] . '</p>';
-            echo'</li>';
-            echo '<li>';
-            echo '<a href="' . $row['location'] . '" target="_blank"><button class="normal">Get direction</button></a>'; // Assuming 'map_link' is a column in your table
-            echo '</li>';
-            echo '</div>';
-            echo '</div>';
-            echo '<div class="img_abcd">';
-            echo '<img src="../images/' . $row['photo'] . '" alt="' . $row['name'] . '">';
-            echo '</div></div>';
-        }
-    } else {
-        // If no shops are found, display a message
-        if(isset($_GET['location'])) {
-            echo '<div class="location-message">';
-            echo '<center><h2>No shops found in ' . $search_location . '</h2></center>';
-            echo '<p>There are currently no shops in the location "' . $search_location . '". Please try again with a different location.</p>';
-            echo '<br>';
-            echo '<br>';
-            echo '</div>';
-        } else {
-            echo '<div class="message">';
-            echo '<center><h2>No shops registered</h2></center>';
-            echo '<p>There are currently no shops registered. Please check back later.</p>';
-            echo '<br>';
-            echo '<br>';
-            echo '</div>';
-        }
-    }
-    mysqli_close($conn);
-    ?>
+     if (!empty($shops)): 
+        foreach ($shops as $row): ?>
+            <div class="outer">
+                <div class="detalis_2">
+                    <h2><?php echo htmlspecialchars($row['name']); ?></h2>
+                    <div class="abcd">
+                        <li>
+                            <ion-icon name="map-outline"></ion-icon>
+                            <p><?php echo htmlspecialchars($row['address']); ?></p>
+                        </li>
+                        <li>
+                            <ion-icon name="mail-open-outline"></ion-icon>
+                            <p><?php echo htmlspecialchars($row['email']); ?></p>
+                        </li>
+                        <li>
+                            <ion-icon name="call-outline"></ion-icon>
+                            <p><?php echo htmlspecialchars($row['contact_no']); ?></p>
+                        </li>
+                        <li>
+                            <ion-icon name="time-outline"></ion-icon>
+                            <p><?php echo htmlspecialchars($row['time']); ?></p>
+                        </li>
+                        <li>
+                            <ion-icon name="person-circle-outline"></ion-icon>
+                            <p><?php echo htmlspecialchars($row['contact_person']); ?></p>
+                        </li>
+                        <li>
+                            <a href="<?php echo htmlspecialchars($row['location']); ?>" target="_blank"><button class="normal">Get direction</button></a>
+                        </li>
+                    </div>
+                </div>
+                <div class="img_abcd">
+                    <img src="../images/<?php echo htmlspecialchars($row['photo']); ?>" alt="<?php echo htmlspecialchars($row['name']); ?>">
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php else: ?>
+        <?php if(isset($_GET['location'])): ?>
+            <div class="location-message">
+                <center><h2>No shops found in <?php echo htmlspecialchars($search_location); ?></h2></center>
+                <p>There are currently no shops in the location "<?php echo htmlspecialchars($search_location); ?>". Please try again with a different location.</p>
+                <br><br>
+            </div>
+        <?php else: ?>
+            <div class="message">
+                <center><h2>No shops registered</h2></center>
+                <p>There are currently no shops registered. Please check back later.</p>
+                <br><br>
+            </div>
+        <?php endif; ?>
+    <?php endif; ?>
 </section>
 
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 </body>
-<?php
-include ("footer.php");
-?>
+<?php include ("footer.php"); ?>
 </html>

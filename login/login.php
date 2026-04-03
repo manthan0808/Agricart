@@ -57,7 +57,7 @@
                     </div>
 
                     <div class="checkbox-text">
-                        <a href="#" class="text">Forgot password?</a>
+                        <a href="comingsoon.php" class="text">Forgot password?</a>
                     </div>
 
                     <div class="input-field button">
@@ -72,6 +72,9 @@
                      <span class="text">
                         <a href="s_login.php" class="text signup-link">Seller Account</a><br>
                     </span>
+                    <span class="text">
+                        <a href="../admin/admin_login.php" class="text signup-link">Admin Portal</a>
+                    </span>
                 </div>
             </div>
 
@@ -81,18 +84,15 @@
 
                 <form action="validation.php" method="POST" autocomplete="off">
                     <input type="hidden" name="action" value="registration">
-                    <!-- <div class="input-field">
-                        <input type="text" placeholder="Enter your Full name" name="name" required>
-                        <i class="uil uil-user"></i>
-                    </div> -->
                     <div class="input-field">
                         <input type="email" placeholder="Enter your email"  name="e-mail" required>
                         <i class="uil uil-envelope icon"></i>
                     </div>
                     <div class="input-field">
-                        <input type="text" placeholder="Enter your Contact No" name="number" required>
+                        <input type="text" placeholder="Enter your Contact No" name="number" pattern="[0-9]{10}" title="Please enter a 10-digit contact number" required>
                         <i class="uil uil-phone-alt"></i>
                     </div>
+                    
                     <div class="input-field">
                         <input type="password" class="password" placeholder="Enter your password" name="password" required>
                         <i class="uil uil-lock icon"></i>

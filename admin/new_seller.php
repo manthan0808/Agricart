@@ -3,8 +3,13 @@ include ("../database/connection.php");
 include ("../session/session_start.php");
 include("../session/session_check.php");
 
-$query = "SELECT * FROM seller_details WHERE verify = 0";
-$result = mysqli_query($conn, $query);
+$sellers = [];
+try {
+    $stmt = $conn->query("SELECT * FROM seller_details WHERE verify = 0");
+    $sellers = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 
 <!DOCTYPE html>
@@ -32,8 +37,10 @@ $result = mysqli_query($conn, $query);
         }
 
         .image-container.enlarged img {
-            max-width: 90%;
-            max-height: 90%;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 0;
         }
 
         .image-container.enlarged .close-btn {
@@ -45,6 +52,7 @@ $result = mysqli_query($conn, $query);
             font-size: 24px;
             z-index: 10000;
         }
+        
     </style>
 </head>
 
@@ -81,7 +89,7 @@ $result = mysqli_query($conn, $query);
                                 <table id="table">
                                     <thead>
                                         <tr>
-                                            <th>#ID</th>
+                                            <th>Sr.no</th>
                                             <th>Photo</th>
                                             <th>Name</th>
                                             <th>Created on</th>
@@ -90,20 +98,20 @@ $result = mysqli_query($conn, $query);
                                     </thead>
                                     <tbody>
                                         <?php 
-                                        if (mysqli_num_rows($result) > 0) {
-                                            while($row = mysqli_fetch_assoc($result)){
+                                        $counter = 1;
+                                        if (!empty($sellers)) {
+                                            foreach ($sellers as $row) {
                                         ?>
                                                 <tr>
-                                                    <td><?php echo $row['seller_id']; ?></td>
-                                                    <!-- <td><?php echo $row['photo']; ?></td> -->
+                                                <td><?php echo $counter++;?></td>
                                                     <td>
                                                         <?php
                                                         $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
                                                         echo "<div class='image-container' id='imageContainer_" . $row['seller_id'] . "'><img src='$image' alt='Seller Photo' onclick='enlargeImage(this)' style='width: 50px; height: 50px; border-radius: 50%;'></div>";
                                                         ?>
                                                     </td>
-                                                    <td><?php echo $row['first_name']; ?></td>
-                                                    <td><?php echo $row['created_on']; ?></td>
+                                                    <td><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></td>
+                                                    <td><?php echo $row['created_on'] ?? ''; ?></td>
                                                     <td>
                                                         <button onclick="openPopup(<?php echo $row['seller_id']; ?>)"><i class="fa-solid fa-magnifying-glass"></i> Views</button>
                                                         <div class="overlay" id="overlay_<?php echo $row['seller_id']; ?>">
@@ -112,14 +120,9 @@ $result = mysqli_query($conn, $query);
                                                                 <h2>Seller Details</h2>
                                                                 <form method="post" action="verify_seller.php">
                                                                     <div style="max-height: 400px; overflow-y: auto;">
-                                                                        <!-- Adjust the following lines to display the correct details -->
+                                                                        
                                                                         <table>
-                                                                            <tr>
-                                                                                <td>ID</td>
-                                                                                <td>
-                                                                                    <div id="sellerIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['seller_id']; ?></div>
-                                                                                </td>
-                                                                            </tr>
+                                                                            
                                                                             <tr>
                                                                                 <td>Photo</td>
                                                                                 <td>
@@ -134,28 +137,28 @@ $result = mysqli_query($conn, $query);
                                                                             <tr>
                                                                                 <td>First Name</td>
                                                                                 <td>
-                                                                                    <div id="sellerNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['first_name']; ?></div>
+                                                                                    <div id="sellerNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></div>
                                                                                 </td>
                                                                             </tr>
                                                                             <tr>
                                                                                 <td>Last Name</td>
                                                                                 <td>
-                                                                                    <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['last_name']; ?></div>
+                                                                                    <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['last_name'] ?? ''); ?></div>
                                                                                 </td>
                                                                             </tr>
                                                                             <tr>
                                                                                 <td>Email</td>
                                                                                 <td>
-                                                                                    <div id="sellerEmailDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['email']; ?></div>
+                                                                                    <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['email']); ?></div>
                                                                                 </td>
                                                                             </tr>
                                                                             <tr>
                                                                                 <td>Government Id</td>
                                                                                 <td>
-                                                                                    <div id="sellerPhotoDisplay">
+                                                                                    <div id="sellerGovIdDisplay">
                                                                                         <?php
-                                                                                            $image = empty($row['government_id']) ? '../images/profile.jpg' : '../images/' . $row['government_id'];
-                                                                                            echo "<div class='image-container' id='imageContainer_" . $row['seller_id'] . "'><img src='$image' alt='Seller Photo' onclick='enlargeImage(this)' style='width: 150px; height: 150px; border-radius: 50%;'></div>";
+                                                                                            $gov_id_img = empty($row['government_id']) ? '../images/profile.jpg' : '../images/' . $row['government_id'];
+                                                                                            echo "<div class='image-container' id='govIdContainer_" . $row['seller_id'] . "'><img src='$gov_id_img' alt='Government ID' onclick='enlargeImage(this)' style='width: 350px; height: 200px; border-radius: 1px;'></div>";
                                                                                         ?>
                                                                                     </div>
                                                                                 </td>
@@ -163,20 +166,23 @@ $result = mysqli_query($conn, $query);
                                                                             <tr>
                                                                                 <td>GST Number</td>
                                                                                 <td>
-                                                                                    <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;">
-                                                                                        <?php if($row['gst_no'] == 0){ echo '-';}else{ echo $row['gst_no'];} ?></div>
+                                                                                    <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;">
+                                                                                        <?php echo (!empty($row['gst_no']) && $row['gst_no'] != 0) ? htmlspecialchars($row['gst_no']) : '-'; ?>
+                                                                                    </div>
                                                                                 </td>
                                                                             </tr>
                                                                             <tr>
                                                                                 <td>Created On</td>
                                                                                 <td>
-                                                                                    <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['created_on']; ?></div>
+                                                                                    <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['created_on'] ?? ''; ?></div>
                                                                                 </td>
                                                                             </tr>
-                                                                            <td>
-                                                                                <input type="hidden" name="seller_id" value="<?php echo $row['seller_id']; ?>">
-                                                                                <button type="submit" name="verifySeller">Verify Seller</button>
-                                                                            </td>
+                                                                            <tr>
+                                                                                <td colspan="2">
+                                                                                    <input type="hidden" name="seller_id" value="<?php echo $row['seller_id']; ?>">
+                                                                                    <button type="submit" name="verifySeller">Verify </button>
+                                                                                </td>
+                                                                            </tr>
                                                                         </table>
                                                                     </div>
                                                                 </form>
@@ -189,7 +195,7 @@ $result = mysqli_query($conn, $query);
                                             }
                                         } else {?>
                                             <tr>
-                                                <td colspan="6">
+                                                <td colspan="5">
                                                     <p class='no-data-found'>No new seller data found.</p>
                                                 </td>
                                             </tr>
@@ -219,26 +225,23 @@ $result = mysqli_query($conn, $query);
             document.getElementById("overlay_" + sellerId).style.display = "none";
         }
 
-        function downloadCSV() {
-            // Open a new window or iframe to trigger the download
-            var downloadWindow = window.open('fetch_details/fetch_seller_details.php', '_blank');
-            downloadWindow.focus();
-        }
-
         function enlargeImage(img) {
             var container = img.parentElement;
             container.classList.add("enlarged");
-            img.style.maxWidth = "90%";
-            img.style.maxHeight = "90%";
-            container.innerHTML += "<span class='close-btn' onclick='shrinkImage(this.parentElement)'>×</span>";
+            var closeBtn = document.createElement("span");
+            closeBtn.className = "close-btn";
+            closeBtn.innerHTML = "×";
+            closeBtn.onclick = function(e) {
+                e.stopPropagation();
+                shrinkImage(container);
+            };
+            container.appendChild(closeBtn);
         }
 
         function shrinkImage(container) {
-            var img = container.querySelector("img");
-            img.style.maxWidth = "50px"; // Original width
-            img.style.maxHeight = "50px"; // Original height
             container.classList.remove("enlarged");
-            container.removeChild(container.lastChild); // Remove the close button
+            var btn = container.querySelector(".close-btn");
+            if (btn) container.removeChild(btn);
         }
     </script>
     <script>
@@ -247,11 +250,11 @@ $result = mysqli_query($conn, $query);
         if(isset($_GET['alert'])) {
             $alert_message = '';
             switch($_GET['alert']) {
-                case 'user change':
-                    $alert_message = 'user verified successfully';
+                case 'verified':
+                    $alert_message = 'User verified successfully!';
                     break;
                 case 'error':
-                    $alert_message = 'Error while verifying';
+                    $alert_message = 'Error while verifying!';
                     break;
                 default:
                     $alert_message = '';

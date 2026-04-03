@@ -3,28 +3,31 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-// Fetch shop details for the specific user from the database
 $seller_username = $_SESSION['username'];
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+$seller_id = null;
+$seller_photo = null;
 
-$sql = "SELECT photo FROM seller_details WHERE seller_id = '$seller_id'";
-$result_img = mysqli_query($conn, $sql);
-
-if (mysqli_num_rows($result_img) > 0) {
-    // Fetch photo path
-    $row = mysqli_fetch_assoc($result_img);
+try {
+    $stmt_seller = $conn->prepare("SELECT seller_id, photo FROM seller_details WHERE email = :email");
+    $stmt_seller->execute(['email' => $seller_username]);
+    $row = $stmt_seller->fetch();
+    
+    if ($row) {
+        $seller_id = $row['seller_id'];
+        $seller_photo = $row['photo'];
+    } else {
+        die("Seller details not found.");
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
-
 ?>
 
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Setting</title>
+    <title>Settings</title>
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -34,7 +37,6 @@ if (mysqli_num_rows($result_img) > 0) {
         <style>
             .table-container input{
                 width: 25%;
-
             }
         </style>
 </head>
@@ -53,11 +55,10 @@ if (mysqli_num_rows($result_img) > 0) {
             <div class="col-div-6">
             <div class="profile">
                 <?php
-                    $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
+                    $image = empty($seller_photo) ? '../images/profile.jpg' : '../images/' . $seller_photo;
                     echo "<td><img src='$image' class='pro-img'></td>";
                 ?>
-                    <!-- <img src="images/user.png" class="pro-img" /> -->
-                    <p><?php echo $seller_username; ?></p>
+                    <p><?php echo htmlspecialchars($seller_username); ?></p>
                 </div>
             </div>
             <div class="clearfix"></div>
@@ -71,25 +72,20 @@ if (mysqli_num_rows($result_img) > 0) {
         <div class="col-div-8">
             <div class="box-8">
                 <div class="content">
-                    <p>
-                        <h1>Change Password</h1>
-                        
-                    </p>
+                    <h1>Change Password</h1>
                     <br />
                     <div class="table-container">
-                    
-                    <table>
+                        <table>
                             <form action="change_password.php" method="POST">
-                                <tr>Current Password</tr><br>
-                                <input type="text" name="current_password"><br>
-                                <tr>New Password</tr><br>
-                                <input type="text" name="new_password"><br>
-                                <tr>Confirm Password</tr><br>
-                                <input type="text" name="confirm_password"><br>
-                                <button name="save_password">Submit</button>
+                                <tr><td>Current Password</td></tr><br>
+                                <input type="password" name="current_password" required><br>
+                                <tr><td>New Password</td></tr><br>
+                                <input type="password" name="new_password" required><br>
+                                <tr><td>Confirm Password</td></tr><br>
+                                <input type="password" name="confirm_password" required><br><br>
+                                <button type="submit" name="save_password">Submit</button>
                             </form>
                         </table>
-
                     </div>
                 </div>
             </div>
@@ -129,44 +125,21 @@ if (mysqli_num_rows($result_img) > 0) {
         ?>
     };
 </script>
-    <script>
-        function openPopup(shopid) {
-            document.getElementById("overlay_" + shopid).style.display = "flex";
-        }
-
-        function closePopup(shopid) {
-            document.getElementById("overlay_" + shopid).style.display = "none";
-        }
-        $(document).ready(function () {
-            $(".nav").click(function () {
-                $("#mySidenav").css('width', '70px');
-                $("#main").css('margin-left', '70px');
-                $(".logo").css('visibility', 'visible');
-                $(".logo span").css('visibility', 'visible');
-                $(".logo span").css('margin-left', '-10px');
-                $(".icon-a").css('visibility', 'visible');
-                $(".icons").css('visibility', 'visible');
-                $(".icons").css('margin-left', '-8px');
-                $(".nav").css('display', 'none');
-                $(".nav2").css('display', 'block');
-                $(".img").css('width', '60px');
-                $(".img").css('height', '45px');
-                $(".white").css('color', 'white');
-            });
-
-            $(".nav2").click(function () {
-                $("#mySidenav").css('width', '300px');
-                $("#main").css('margin-left', '300px');
-                $(".logo").css('visibility', 'visible');
-                $(".icon-a").css('visibility', 'visible');
-                $(".icons").css('visibility', 'visible');
-                $(".nav").css('display', 'block');
-                $(".nav2").css('display', 'none');
-                $(".img").css('width', '160px');
-                $(".img").css('height', '110px');
-                $(".white").css('color', '#818181');
-            });
+<script>
+    $(document).ready(function () {
+        $(".nav").click(function () {
+            $("#mySidenav").css('width', '70px');
+            $("#main").css('margin-left', '70px');
+            $(".nav").css('display', 'none');
+            $(".nav2").css('display', 'block');
         });
-    </script>
 
+        $(".nav2").click(function () {
+            $("#mySidenav").css('width', '300px');
+            $("#main").css('margin-left', '300px');
+            $(".nav").css('display', 'block');
+            $(".nav2").css('display', 'none');
+        });
+    });
+</script>
 </html>

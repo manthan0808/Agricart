@@ -4,11 +4,7 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 
 if(isset($_GET['logout'])) {
-    // Unset all of the session variables.
     $_SESSION = array();
-
-    // If it's desired to kill the session, also delete the session cookie.
-    // Note: This will destroy the session, and not just the session data!
     if (ini_get("session.use_cookies")) {
         $params = session_get_cookie_params();
         setcookie(session_name(), '', time() - 42000,
@@ -16,41 +12,40 @@ if(isset($_GET['logout'])) {
             $params["secure"], $params["httponly"]
         );
     }
-
-    // Finally, destroy the session.
     session_destroy();
-
-    // Redirect to the logout page with a delay
     echo '<script>
             setTimeout(function() {
                 window.location.href = "../login/logout.php";
-            }, 1000); // 1000 milliseconds = 1 second
+            }, 1000);
           </script>';
     exit();
 }
 
-if(isset($_SESSION['username'])) {
+try {
     $username = $_SESSION['username'];
+    $buyer_id = null;
+    $buyer_details = [];
+    $cart_row = ['product_count' => 0];
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id;
+    $stmt_id = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+    $stmt_id->execute(['email' => $username]);
+    $id_row = $stmt_id->fetch();
+    
+    if ($id_row) {
+        $buyer_id = $id_row['buyer_id'];
 
-    $query = "SELECT * FROM buyer_details where buyer_id = '$buyer_id' "; // Ordering randomly and limiting to 6 products
-    $result = mysqli_query($conn, $query);
-    $buyer_details = mysqli_fetch_assoc($result);
+        $stmt_details = $conn->prepare("SELECT * FROM buyer_details WHERE buyer_id = :id");
+        $stmt_details->execute(['id' => $buyer_id]);
+        $buyer_details = $stmt_details->fetch();
 
-    $cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-    $result_count = $conn->query($cartcount);
-
-// Check if the query executed successfully
-    if ($result_count) {
-    // Fetch the result
-    $row = $result_count->fetch_assoc();
+        $stmt_count = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id");
+        $stmt_count->execute(['id' => $buyer_id]);
+        $cart_row = $stmt_count->fetch();
     }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -58,7 +53,7 @@ if(isset($_SESSION['username'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Personal Details</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -67,7 +62,6 @@ if(isset($_SESSION['username'])) {
         location.reload();
     }
 </script>
-
 </head>
 <body>
 
@@ -83,8 +77,8 @@ if(isset($_SESSION['username'])) {
             <li class="icon">
                 <div class="cart">
                     <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                    <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                    <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
                 </div>
             </li>
@@ -93,7 +87,7 @@ if(isset($_SESSION['username'])) {
                 <a href="profile.php"><ion-icon name="person-circle-outline"></ion-icon> Profile</a>
                 <a href="order.php"><ion-icon name="cube-outline"></ion-icon> Orders</a>
                 <a href="../login/logout.php"><ion-icon name="log-out-outline"></ion-icon> Log Out</a>
-            </div>
+            </div>
             </li>
         </ul>
     </div>
@@ -103,50 +97,46 @@ if(isset($_SESSION['username'])) {
     <div class="profile-1">
         <center>
                 <?php 
-                $image = empty($row['photo']) ? '../images/adminfarmerlogo.png' : '../images/' . $row['photo'];
+                $image = (isset($buyer_details['photo']) && !empty($buyer_details['photo'])) ? '../images/' . $buyer_details['photo'] : '../images/adminfarmerlogo.png';
                 ?>
                 <img src="<?php echo $image; ?>" alt=""><br><br>
-                 <h2> <?php echo $buyer_details['full_name']; ?> </h2>
-                 <span><?php echo $buyer_details['email']; ?> </span><br>
+                 <h2> <?php echo htmlspecialchars($buyer_details['full_name'] ?? ''); ?> </h2>
+                 <span><?php echo htmlspecialchars($buyer_details['email'] ?? ''); ?> </span><br>
         </center>
     </div>
     
     <div class="profile-2">
         <form action="update_profile.php" method="post">
-            <!-- Display Profile Data Here -->
             <center><h3>Profile Settings</h3></center>
             <div class="name">
                 Full Name<br>
-                <input type="text" name="first_name" value="<?php echo $buyer_details['full_name']; ?>">
+                <input type="text" name="first_name" value="<?php echo htmlspecialchars($buyer_details['full_name'] ?? ''); ?>">
             </div>
             <div class="name">
                 Phone Number<br>
-                <input type="text" name="contact_no" value="<?php echo $buyer_details['contact_no']; ?>">
+                <input type="text" name="contact_no" value="<?php echo htmlspecialchars($buyer_details['contact_no'] ?? ''); ?>">
             </div>
             <div class="name">
                 Email<br>
-                <input type="text" name="email" value="<?php echo $buyer_details['email']; ?>" readonly>
+                <input type="text" name="email" value="<?php echo htmlspecialchars($buyer_details['email'] ?? ''); ?>" readonly>
             </div>
             <div class="name">
                 Address<br>
-                <textarea name="address"><?php echo $buyer_details['address']; ?></textarea>
+                <textarea name="address"><?php echo htmlspecialchars($buyer_details['address'] ?? ''); ?></textarea>
             </div>
             <div class="name">
                 Pin code<br>
-                <input type="number" name="pin_code" value="<?php echo $buyer_details['pin_code']; ?>" >
+                <input type="number" name="pin_code" value="<?php echo htmlspecialchars($buyer_details['pin_code'] ?? ''); ?>" >
             </div>
             <div class="name">
                 State/Region<br>
                 <select id="stateRegionSelect" name="state">
                     <option value="">Select State/Region</option>
                     <?php
-                        // Array of Indian states
                         $indianStates = array("Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal");
-
-                        // Loop through the array to populate options
                         foreach ($indianStates as $state) {
-                            $selected = ($state == $buyer_details['state']) ? 'selected' : '';
-                            echo "<option value='$state' $selected>$state</option>";
+                            $selected = (isset($buyer_details['state']) && $state == $buyer_details['state']) ? 'selected' : '';
+                            echo "<option value='".htmlspecialchars($state)."' $selected>".htmlspecialchars($state)."</option>";
                         }
                     ?>
                 </select>
@@ -157,7 +147,6 @@ if(isset($_SESSION['username'])) {
     
     <div class="profile-3">
         <form action="update_password.php" method="post">
-            <!-- Password Change Form -->
             <center><h3>Change Password</h3></center>
             <div class="name">
                 Current Password<br>
@@ -177,7 +166,6 @@ if(isset($_SESSION['username'])) {
                     
 </section>
 
-
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 <script>
@@ -187,7 +175,7 @@ if(isset($_SESSION['username'])) {
             $alert_message = '';
             switch($_GET['alert']) {
                 case 'profile_update':
-                    $alert_message = 'Profile updated succeddfully!';
+                    $alert_message = 'Profile updated successfully!';
                     break;
                 case 'password_changed_successfully':
                     $alert_message = 'Password changed successfully!';
@@ -201,9 +189,6 @@ if(isset($_SESSION['username'])) {
                 case 'incorrect_current_password':
                     $alert_message = 'Current password is incorrect!';
                     break;
-                default:
-                    $alert_message = '';
-                    break;
             }
             if($alert_message) {
                 echo 'alert("' . $alert_message . '");';
@@ -212,8 +197,6 @@ if(isset($_SESSION['username'])) {
         ?>
     };
 </script>
-<?php
-include ("footer.php");
-?>
 </body>
+<?php include ("footer.php"); ?>
 </html>

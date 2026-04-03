@@ -5,20 +5,25 @@ include("../database/connection.php");
 
 // Fetch shop details for the specific user from the database
 $seller_username = $_SESSION['username'];
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+$seller_id = null;
+$shops = [];
+$seller_photo = null;
 
-$sql_shop = "SELECT * FROM shop_details WHERE seller_id = $seller_id";
-$result_shop = mysqli_query($conn, $sql_shop);
+try {
+    $stmt_seller = $conn->prepare("SELECT seller_id, photo FROM seller_details WHERE email = :email");
+    $stmt_seller->execute(['email' => $seller_username]);
+    $seller_row = $stmt_seller->fetch();
+    
+    if ($seller_row) {
+        $seller_id = $seller_row['seller_id'];
+        $seller_photo = $seller_row['photo'];
 
-$sql = "SELECT photo FROM seller_details WHERE seller_id = '$seller_id'";
-$result_img = mysqli_query($conn, $sql);
-
-if (mysqli_num_rows($result_img) > 0) {
-    // Fetch photo path
-    $row = mysqli_fetch_assoc($result_img);
+        $stmt_shops = $conn->prepare("SELECT * FROM shop_details WHERE seller_id = :id");
+        $stmt_shops->execute(['id' => $seller_id]);
+        $shops = $stmt_shops->fetchAll();
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 
@@ -92,11 +97,10 @@ if (mysqli_num_rows($result_img) > 0) {
             <div class="col-div-6">
             <div class="profile">
                 <?php
-                    $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
+                    $image = empty($seller_photo) ? '../images/profile.jpg' : '../images/' . $seller_photo;
                     echo "<td><img src='$image' class='pro-img'></td>";
                 ?>
-                    <!-- <img src="images/user.png" class="pro-img" /> -->
-                    <p><?php echo $seller_username; ?></p>
+                    <p><?php echo htmlspecialchars($seller_username); ?></p>
                 </div>
             </div>
             <div class="clearfix"></div>
@@ -125,26 +129,25 @@ if (mysqli_num_rows($result_img) > 0) {
                                 <th>Tools</th>
                             </tr>
                             <?php
-                            // Check if any rows were returned
-                            if ($result_shop && mysqli_num_rows($result_shop) > 0) {
-                                $sr_no = 1; // Initialize SR No.
-                                while ($row = mysqli_fetch_assoc($result_shop)) {?>
+                            if (!empty($shops)) {
+                                $sr_no = 1;
+                                foreach ($shops as $row) {?>
                                     <tr>
                                         <td><?php echo $sr_no++; ?></td>
                                         <?php
                                         $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
-                                        echo "<td><img src='$image' alt='Seller Photo' style='width: 50px; height: 50px; border-radius: 50%;'></td>";
+                                        echo "<td><img src='$image' alt='Shop Photo' style='width: 50px; height: 50px; border-radius: 50%;'></td>";
                                         ?>
-                                        <td><?php echo $row['name']; ?></td>
-                                        <td><?php echo $row['city']; ?></td>
+                                        <td><?php echo htmlspecialchars($row['name']); ?></td>
+                                        <td><?php echo htmlspecialchars($row['city']); ?></td>
                                         <td>
                                             <div class="view-button">
                                                 <button onclick="openPopup(<?php echo $row['shop_id']; ?>)">
                                                     <i class='fa-solid fa-magnifying-glass'></i> Edit
                                                 </button>
-                                                <form method="POST" action="delete_shop.php">
+                                                <form method="POST" action="delete_shop.php" style="display:inline;">
                                                     <input type="hidden" name="shop_id" value="<?php echo $row['shop_id']; ?>">
-                                                    <button type="submit">
+                                                    <button type="submit" onclick="return confirm('Are you sure you want to delete this shop?');">
                                                     <ion-icon name="trash-outline"></ion-icon> Delete
                                                     </button>
                                                 </form>
@@ -152,7 +155,7 @@ if (mysqli_num_rows($result_img) > 0) {
                                             <div class="overlay" id="overlay_<?php echo $row['shop_id']; ?>">
                                         <div class="popup">
                                             <span class="close-btn" onclick="closePopup('<?php echo $row['shop_id']; ?>')">×</span>
-                                            <h2>Edit Product Details</h2>
+                                            <h2>Edit Shop Details</h2>
                                             <form method="POST" action="update_shop.php" enctype="multipart/form-data">
                                                 <input type="hidden" name="shop_id" value="<?php echo $row['shop_id']; ?>">
                                                 <div style="max-height: 400px; overflow-y: auto;">
@@ -160,26 +163,25 @@ if (mysqli_num_rows($result_img) > 0) {
                                                         <tr>
                                                             <td>Shop Name</td>
                                                             <td>
-                                                                <input type="text" name="name" value="<?php echo $row['name']; ?>">
+                                                                <input type="text" name="name" value="<?php echo htmlspecialchars($row['name']); ?>">
                                                             </td>
                                                         </tr>
-                                                        
                                                         <tr>
                                                             <td>Address</td>
                                                             <td>
-                                                                <input type="text" name="address" value="<?php echo $row['address']; ?>">
+                                                                <input type="text" name="address" value="<?php echo htmlspecialchars($row['address']); ?>">
                                                             </td>
                                                         </tr>
                                                         <tr>
                                                             <td>City</td>
                                                             <td>
-                                                                <input type="text" name="city" value="<?php echo $row['city']; ?>">
+                                                                <input type="text" name="city" value="<?php echo htmlspecialchars($row['city']); ?>">
                                                             </td>
                                                         </tr>
                                                         <tr>
                                                             <td>E-mail</td>
                                                             <td>
-                                                            <input type="text" name="email" value="<?php echo $row['city']; ?>">
+                                                            <input type="text" name="email" value="<?php echo htmlspecialchars($row['email']); ?>">
                                                             </td>
                                                         </tr>
                                                         <tr>
@@ -190,20 +192,20 @@ if (mysqli_num_rows($result_img) > 0) {
                                                             </td>
                                                         </tr>
                                                         <tr>
-                                                            <td>Conatct Number</td>
-                                                            <td><input type="number" name="contact_no" value="<?php echo $row['contact_no']; ?>"></td>
+                                                            <td>Contact Number</td>
+                                                            <td><input type="text" name="contact_no" value="<?php echo htmlspecialchars($row['contact_no']); ?>"></td>
                                                         </tr>
                                                         <tr>
-                                                            <td>location</td>
-                                                            <td><input type="text" name="location" value="<?php echo $row['location']; ?>"></td>
+                                                            <td>Location (URL)</td>
+                                                            <td><input type="text" name="location" value="<?php echo htmlspecialchars($row['location']); ?>"></td>
                                                         </tr>
                                                         <tr>
-                                                            <td>Timming</td>
-                                                            <td><input type="text" name="timming" value="<?php echo $row['time']; ?>"></td>
+                                                            <td>Timing</td>
+                                                            <td><input type="text" name="timing" value="<?php echo htmlspecialchars($row['time']); ?>"></td>
                                                         </tr>
                                                         <tr>
                                                             <td>Contact Person</td>
-                                                            <td><input type="text" name="contact_person" value="<?php echo $row['contact_person']; ?>"></td>
+                                                            <td><input type="text" name="contact_person" value="<?php echo htmlspecialchars($row['contact_person']); ?>"></td>
                                                         </tr>
                                                     </table>
                                                 </div>
@@ -216,7 +218,6 @@ if (mysqli_num_rows($result_img) > 0) {
                                     <?php
                                 }
                             } else {
-                                // No shops found for the user
                                 echo "<tr><td colspan='5'>No shops found.</td></tr>";
                             }
                             ?>

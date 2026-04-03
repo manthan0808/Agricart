@@ -2,63 +2,62 @@
 include("../session/session_start.php");
 include("../database/connection.php");
 
+$totalPrice = 0;
+$shippingCharges = 0;
+$cart_items = [];
+
 // Check if 'username' session variable is set
 if(isset($_SESSION['username'])) {
     $username = $_SESSION['username'];
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    
+    try {
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        
+        if ($buyer_id_row) {
+            $buyer_id = $buyer_id_row['buyer_id'];
 
-    $query = "SELECT cart_details.*, product_details.name, product_details.price, product_details.photo FROM cart_details 
-              INNER JOIN product_details ON cart_details.product_id = product_details.product_id
-              WHERE cart_details.buyer_id = '$buyer_id'";
-    $result = mysqli_query($conn, $query);
+            // Handle product removal
+            if(isset($_GET['remove_product'])) {
+                $product_id = $_GET['remove_product'];
+                $stmt_remove = $conn->prepare("DELETE FROM cart_details WHERE buyer_id = :buyer_id AND product_id = :product_id");
+                $run_remove = $stmt_remove->execute(['buyer_id' => $buyer_id, 'product_id' => $product_id]);
 
-    $totalPrice = 0;
-
-    while ($row = mysqli_fetch_assoc($result)) {
-        $product_price = $row['price'];
-        $quantity = $row['quantity'];
-        $subtotal = $product_price * $quantity;
-        $totalPrice += $subtotal;
-    }
-
-    if(isset($_GET['remove_product'])) {
-        $product_id = $_GET['remove_product'];
-
-        // Check if product exists
-        $check_query = "SELECT * FROM cart_details WHERE buyer_id = '$buyer_id' AND product_id = $product_id";
-        $check_result = mysqli_query($conn, $check_query);
-
-        if(mysqli_num_rows($check_result) > 0) {
-            // Product exists, proceed with removal
-            $remove_query = "DELETE FROM cart_details WHERE buyer_id = '$buyer_id' AND product_id = $product_id LIMIT 1";
-            $remove_result = mysqli_query($conn, $remove_query);
-
-            if($remove_result) {
-                header("Location: cart.php"); 
-                exit();
-            } else {
-                echo "Error removing product from cart";
+                if($run_remove) {
+                    header("Location: cart.php"); 
+                    exit();
+                } else {
+                    echo "Error removing product from cart";
+                }
             }
-        } else {
-            echo "<script>alert('Product not found in cart.');</script>";
-        }
-    }
-}
 
+            // Fetch cart items
+            $query = "SELECT cart_details.*, product_details.name, product_details.price, product_details.photo FROM cart_details 
+                      INNER JOIN product_details ON cart_details.product_id::integer = product_details.product_id
+                      WHERE cart_details.buyer_id = :buyer_id";
+            // Note: PostgreSQL cast ::integer used here, matching seller/index.php fix
+            if ($db_type !== 'pgsql') {
+                $query = str_replace('::integer', '', $query);
+            }
 
-$shippingCharges = 0;
-if(isset($result)) {
-    mysqli_data_seek($result, 0);
-    while ($row = mysqli_fetch_assoc($result)) {
-        $product_price = $subtotal;
-        if ($product_price < 150) {
-            $shippingCharges += 20;
+            $stmt_cart = $conn->prepare($query);
+            $stmt_cart->execute(['buyer_id' => $buyer_id]);
+            $cart_items = $stmt_cart->fetchAll();
+
+            foreach ($cart_items as $row) {
+                $product_price = $row['price'];
+                $quantity = $row['quantity'];
+                $subtotal = $product_price * $quantity;
+                $totalPrice += $subtotal;
+                
+                if ($subtotal < 150) {
+                    $shippingCharges += 20;
+                }
+            }
         }
+    } catch (PDOException $e) {
+        die("Database error: " . $e->getMessage());
     }
 }
 
@@ -70,7 +69,7 @@ $totalWithShipping = $totalPrice + $shippingCharges;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Cart</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -80,22 +79,18 @@ $totalWithShipping = $totalPrice + $shippingCharges;
         }
         
         function prepareCheckout() {
-            // Create an array to store product details
             var products = [];
-
-            // Loop through each product row in the table
             var rows = document.querySelectorAll("#cart tbody tr");
             rows.forEach(function(row) {
-                var product = {
-                    product_id: row.querySelector(".product_id").value,
-                    price: row.querySelector(".price").textContent.replace("₹", ""),
-                    quantity: row.querySelector(".quantity").textContent,
-                };
-                // Push product details to the array
-                products.push(product);
+                if (row.querySelector(".product_id")) {
+                    var product = {
+                        product_id: row.querySelector(".product_id").value,
+                        price: row.querySelector(".price").textContent.replace("₹", "").trim(),
+                        quantity: row.querySelector(".quantity").textContent.trim(),
+                    };
+                    products.push(product);
+                }
             });
-
-            // Convert the array to JSON and set it as the value of the hidden input field
             document.getElementById("product_details").value = JSON.stringify(products);
         }
     </script>
@@ -116,7 +111,7 @@ $totalWithShipping = $totalPrice + $shippingCharges;
                 <a href="profile.php"><ion-icon name="person-circle-outline"></ion-icon> Profile</a>
                 <a href="order.php"><ion-icon name="cube-outline"></ion-icon> Orders</a>
                 <a href="../login/logout.php"><ion-icon name="log-out-outline"></ion-icon> Log Out</a>
-            </div>
+            </div>
             </li>
             </ul>
         </div>
@@ -141,11 +136,8 @@ $totalWithShipping = $totalPrice + $shippingCharges;
             </thead>
             <tbody>
                 <?php
-                if(isset($result)) {
-                    // Reset the data seek pointer to start fetching from the beginning
-                    mysqli_data_seek($result, 0);
-                    
-                    while ($row = mysqli_fetch_assoc($result)) {
+                if(!empty($cart_items)) {
+                    foreach ($cart_items as $row) {
                         $product_name = $row['name'];
                         $product_price = $row['price'];
                         $quantity = $row['quantity'];
@@ -154,7 +146,7 @@ $totalWithShipping = $totalPrice + $shippingCharges;
                         <tr>
                             <td><a href="javascript:void(0)" onclick="removeProduct(<?php echo $row['product_id']; ?>)"><ion-icon name="close-circle-outline"></ion-icon></a></td>
                             <td><img src="../images/<?php echo empty($row['photo']) ? 'abc2.jpeg' : $row['photo']; ?>" alt="Product Image"></td>
-                            <td><?php echo $product_name; ?></td>
+                            <td><?php echo htmlspecialchars($product_name); ?></td>
                             <td class="price">₹<?php echo $product_price; ?></td>
                             <td class="quantity"><?php echo $quantity; ?></td>
                             <td>₹<?php echo $subtotal; ?></td>
@@ -169,8 +161,8 @@ $totalWithShipping = $totalPrice + $shippingCharges;
             </tbody>
         </table>
     </section>
-    <?php if($totalWithShipping >1){
-                ?>
+
+    <?php if($totalPrice > 0): ?>
     <section id="cart-parts" class="section-p1"> 
         <div id="subtotal">
             <h3>Cart Total</h3>
@@ -181,17 +173,15 @@ $totalWithShipping = $totalPrice + $shippingCharges;
                 </tr>
                 <tr>
                     <td>Shipping Charges</td>
-                    <td><?php echo ($shippingCharges == 0) ? 'Free' : "₹" . $shippingCharges; ?></td>
+                    <td><?php echo ($shippingCharges == 0) ? 'Free' : "₹" . number_format($shippingCharges, 2); ?></td>
                 </tr>
-            
                 <tr>
                     <td><strong>Total</strong></td>
                     <td>₹<?php echo number_format($totalWithShipping, 2);?></td>
                 </tr>
             </table>
-            <button type="submit" name="proceed_to_checkout" class="normal" onclick="openPopup()">Proceed To Checkout</button>
+            <button type="button" class="normal" onclick="openPopup()">Proceed To Checkout</button>
                 
-                </form>
                     <div class="overlay" id="overlay">
                         <div class="popup">
                             <span class="close-btn" onclick="closePopup()">×</span>
@@ -200,8 +190,7 @@ $totalWithShipping = $totalPrice + $shippingCharges;
                                     <center>
                                         <h3>Online Payment</h3>
                                         <img src="../images/payment-badge.png" class="logo-pay"><br>
-                                        <a href="online.php"><button type="submit" class="normal" >Pay Online</button></a>
-                                        <!-- <h3>comming soon</h3> -->
+                                        <a href="online.php"><button type="button" class="normal" >Pay Online</button></a>
                                     </center>
                                 </div>
                                 <div class="pay_2">
@@ -220,9 +209,7 @@ $totalWithShipping = $totalPrice + $shippingCharges;
                 </div>
         </div>
     </section>
-    <?php
-            }
-            ?>
+    <?php endif; ?>
 
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
@@ -230,11 +217,9 @@ $totalWithShipping = $totalPrice + $shippingCharges;
         function openPopup() {
             document.getElementById("overlay").style.display = "flex";
         }
-
         function closePopup() {
             document.getElementById("overlay").style.display = "none";
         }
-
         function removeProduct(productId) {
             var confirmation = confirm('Are you sure you want to remove the product?');
             if (confirmation) {
@@ -243,7 +228,5 @@ $totalWithShipping = $totalPrice + $shippingCharges;
         }
     </script>
 </body>
-<?php
-    include ("footer.php");
-?>
+<?php include ("footer.php"); ?>
 </html>

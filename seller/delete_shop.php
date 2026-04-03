@@ -3,24 +3,25 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Retrieve shop_id from the POST request
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['shop_id'])) {
     $shop_id = $_POST['shop_id'];
 
-    // Delete the shop from the database
-    $delete_query = "DELETE FROM shop_details WHERE shop_id = '$shop_id'";
-    $result = mysqli_query($conn, $delete_query);
+    try {
+        // Delete the shop from the database
+        $stmt_delete = $conn->prepare("DELETE FROM shop_details WHERE shop_id = :id");
+        $run = $stmt_delete->execute(['id' => $shop_id]);
 
-    if ($result) {
-        // Shop successfully deleted
-        header("Location: shop.php");
-        exit;
-    } else {
-        // Error occurred while deleting the shop
-        echo "Error deleting the shop. Please try again.";
+        if ($run) {
+            // Shop successfully deleted
+            header("Location: shop.php?alert=delete_success");
+            exit;
+        } else {
+            echo "Error deleting the shop. Please try again.";
+        }
+    } catch (PDOException $e) {
+        die("Delete failed: " . $e->getMessage());
     }
 } else {
-    // If the request method is not POST, redirect back to the shop page
     header("Location: shop.php");
     exit;
 }

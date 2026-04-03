@@ -57,7 +57,7 @@
                     </div>
 
                     <div class="checkbox-text">
-                        <a href="#" class="text">Forgot password?</a>
+                        <a href="comingsoon.php" class="text">Forgot password?</a>
                     </div>
 
                     <div class="input-field button">
@@ -66,7 +66,7 @@
                 </form>
 
                 <div class="login-signup">
-                    <span class="text">Not a member?
+                    <span class="text">Not a Seller?
                         <a href="#" class="text signup-link">Signup Now</a>
                     </span>
                 </div>
@@ -86,10 +86,14 @@
                         <input type="email" placeholder="Enter your email"  name="e-mail" required>
                         <i class="uil uil-envelope icon"></i>
                     </div>
-                    <div class="input-field">
+                    <!-- <div class="input-field">
                         <input type="text" placeholder="Enter your Contact No" name="number" required>
                         <i class="uil uil-phone-alt"></i>
-                    </div>
+                    </div> -->
+                    <div class="input-field">
+        <input type="text" placeholder="Enter your Contact No" name="number" pattern="[0-9]{10}" title="Please enter a 10-digit contact number" required>
+        <i class="uil uil-phone-alt"></i>
+    </div>
                     <div class="input-field">
                         <input type="password" class="password" placeholder="Enter your password" name="password" required>
                         <i class="uil uil-lock icon"></i>

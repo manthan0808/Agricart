@@ -11,7 +11,7 @@ include("../session/session_check.php");
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin</title>
+    <title>Create Admin</title>
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://maxst.icons8.com/vue-static/landings/line-awesome/line-awesome/1.3.0/css/line-awesome.min.css">
     <link rel="stylesheet" href="admin.css">
@@ -30,7 +30,7 @@ include("../session/session_check.php");
                         Create Admin
                     </h1>
                     <p>
-                        Create a new admin account<span class="las la-chart-lin"></span>
+                        Create a new admin account <span class="las la-chart-lin"></span>
                     </p>
                 </div>
             </div>
@@ -47,16 +47,16 @@ include("../session/session_check.php");
                     <div class="profile-3">
                         <form action="create_admin_process.php" method="post">
                             <div class="name">
-                                User Name<br>
-                                <input type="text" name="email">
+                                User Name (Email)<br>
+                                <input type="email" name="email" required>
                             </div>
                             <div class="name">
                                 Password<br>
-                                <input type="text" name="password">
+                                <input type="password" name="password" required>
                             </div>
                             <div class="name">
                                 Contact Number<br>
-                                <input type="text" name="contact_no">
+                                <input type="text" name="contact_no" required>
                             </div>
                             <center><button class="profile-button" type="submit" name="create_admin">Create Admin</button></center>
                         </form>
@@ -76,13 +76,13 @@ include("../session/session_check.php");
             $alert_message = '';
             switch($_GET['alert']) {
                 case 'useralreadyexist':
-                    $alert_message = 'user already exist!';
+                    $alert_message = 'Admin user already exists!';
                     break;
                 case 'admincreated':
                     $alert_message = 'Admin Created Successfully!';
                     break;
                 case 'error':
-                    $alert_message = 'Error occurred while creating!';
+                    $alert_message = 'Error occurred while creating admin account!';
                     break;
                 default:
                     $alert_message = '';

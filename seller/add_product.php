@@ -3,19 +3,24 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-// Fetch shop details for the specific user from the database
+// Fetch seller details for the specific user from the database
 $seller_username = $_SESSION['username'];
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+$seller_id = null;
+$seller_photo = null;
 
-$sql = "SELECT photo FROM seller_details WHERE seller_id = '$seller_id'";
-$result_img = mysqli_query($conn, $sql);
-
-if (mysqli_num_rows($result_img) > 0) {
-    // Fetch photo path
-    $row = mysqli_fetch_assoc($result_img);
+try {
+    $stmt_seller = $conn->prepare("SELECT seller_id, photo FROM seller_details WHERE email = :email");
+    $stmt_seller->execute(['email' => $seller_username]);
+    $row = $stmt_seller->fetch();
+    
+    if ($row) {
+        $seller_id = $row['seller_id'];
+        $seller_photo = $row['photo'];
+    } else {
+        die("Seller details not found.");
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 
 ?>
@@ -24,7 +29,7 @@ if (mysqli_num_rows($result_img) > 0) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Product Page</title>
+    <title>Add Product</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -40,16 +45,15 @@ if (mysqli_num_rows($result_img) > 0) {
                 <span style="font-size:30px;cursor:pointer; color: #000e04;" class="nav"><i
                         class="fa-solid fa-bars"></i> Add Product</span>
                 <span style="font-size:30px;cursor:pointer; color: rgb(0, 0, 0);" class="nav2"><i
-                        class="fa-solid fa-bars"></i> Add Product</span> <!-- Corrected typo -->
+                        class="fa-solid fa-bars"></i> Add Product</span> 
             </div>
             <div class="col-div-6">
             <div class="profile">
                 <?php
-                    $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
+                    $image = empty($seller_photo) ? '../images/profile.jpg' : '../images/' . $seller_photo;
                     echo "<td><img src='$image' class='pro-img'></td>";
                 ?>
-                    <!-- <img src="images/user.png" class="pro-img" /> -->
-                    <p><?php echo $seller_username; ?></p>
+                    <p><?php echo htmlspecialchars($seller_username); ?></p>
                 </div>
             </div>
             <div class="clearfix"></div>
@@ -69,8 +73,8 @@ if (mysqli_num_rows($result_img) > 0) {
                             <label for="product_name">Product Name:</label><br>
                             <input type="text" id="product_name" name="product_name" required><br>
 
-                            <label for="price">MRP:</label><br>
-                            <input type="number" min="0" id="price" name="mrp" required><br>
+                            <label for="mrp">MRP:</label><br>
+                            <input type="number" min="0" id="mrp" name="mrp" required><br>
 
                             <label for="price">Selling Price:</label><br>
                             <input type="number" min="0" id="price" name="price" required><br>
@@ -109,8 +113,8 @@ if (mysqli_num_rows($result_img) > 0) {
         if(isset($_GET['alert'])) {
             $alert_message = '';
             switch($_GET['alert']) {
-                case 'Shop Details INserted Successfully':
-                    $alert_message = 'Product Details Inserted Succesfully';
+                case 'success':
+                    $alert_message = 'Product Details Inserted Successfully';
                     break;
                 case 'error':
                     $alert_message = 'Error while inserting data!';
@@ -144,6 +148,7 @@ if (mysqli_num_rows($result_img) > 0) {
         });
 
         $(".nav2").click(function () {
+            // Updated expanded width to match other pages
             $("#mySidenav").css('width', '300px');
             $("#main").css('margin-left', '300px');
             $(".logo").css('visibility', 'visible');

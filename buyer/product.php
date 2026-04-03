@@ -3,75 +3,73 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-$query = "SELECT * FROM product_details ORDER BY RAND()"; // Assuming your table name is 'product_details'
-$result = mysqli_query($conn, $query);
- 
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
-}
-$buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id; 
-if(isset($_POST['add_to_cart_short_cut'])) {
-    $product_id = mysqli_real_escape_string($conn, $_POST['product_id']);
-    $quantity = 1; 
+try {
+    // Ordering randomly
+    $random_func = ($db_type === 'pgsql') ? 'RANDOM()' : 'RAND()';
+    $query = "SELECT * FROM product_details ORDER BY $random_func"; 
+    $stmt_products = $conn->query($query);
+    $products = $stmt_products->fetchAll();
 
-    // Check if the product already exists in the cart
-    $check_query = "SELECT * FROM cart_details WHERE product_id = '$product_id' AND buyer_id = '$buyer_id'";
-    $check_result = mysqli_query($conn, $check_query);
-    
-    if(mysqli_num_rows($check_result) > 0) {
-        // If the product already exists, update the quantity
-        $update_query = "UPDATE cart_details SET quantity = quantity + $quantity WHERE product_id = '$product_id' AND buyer_id = '$buyer_id'";
-        $update_result = mysqli_query($conn, $update_query);
+    $username = $_SESSION['username'] ?? null;
+    $buyer_id = null;
+    $cart_row = ['product_count' => 0];
 
-        if($update_result) {
-            // Quantity updated successfully
-            echo "<script>alert('Quantity updated successfully.')</script>";
-        } else {
-            // Error updating quantity
-            echo "<script>alert('Failed to update quantity. Please try again.')</script>";
-        }
-    } else {
-        // If the product does not exist, insert a new entry
-        $insert_query = "INSERT INTO cart_details (product_id, buyer_id, quantity) VALUES ('$product_id', '$buyer_id', '$quantity')";
-        $insert_result = mysqli_query($conn, $insert_query);
-
-        if($insert_result) {
-            // Product successfully added to cart
-            echo "<script>alert('Product added to cart successfully.')</script>";
-        } else {
-            // Error occurred while adding product to cart
-            echo "<script>alert('Failed to add product to cart. Please try again.')</script>";
+    if ($username) {
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        
+        if ($buyer_id_row) {
+            $buyer_id = $buyer_id_row['buyer_id'];
+            
+            // Fetch cart count
+            $cartcount_query = "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id";
+            $stmt_cartcount = $conn->prepare($cartcount_query);
+            $stmt_cartcount->execute(['id' => $buyer_id]);
+            $cart_row = $stmt_cartcount->fetch();
         }
     }
 
-    // Redirect to the same page to prevent form resubmission
-    header("Location: ".$_SERVER['PHP_SELF']);
-    exit();
-}
+    // Check if add to cart button is clicked
+    if(isset($_POST['add_to_cart_short_cut'])) {
+        $product_id = $_POST['product_id'];
+        $quantity = 1; 
 
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
+        if (!$buyer_id) {
+            echo "<script>alert('Please login to add products to cart.')</script>";
+        } else {
+            // Check if the product already exists in the cart
+            $stmt_check = $conn->prepare("SELECT * FROM cart_details WHERE product_id = :product_id AND buyer_id = :buyer_id");
+            $stmt_check->execute(['product_id' => $product_id, 'buyer_id' => $buyer_id]);
+            $existing_item = $stmt_check->fetch();
+            
+            if($existing_item) {
+                // If the product already exists, update the quantity
+                $stmt_update = $conn->prepare("UPDATE cart_details SET quantity = quantity + :quantity WHERE product_id = :product_id AND buyer_id = :buyer_id");
+                $stmt_update->execute([
+                    'quantity' => $quantity,
+                    'product_id' => $product_id,
+                    'buyer_id' => $buyer_id
+                ]);
+                echo "<script>alert('Quantity updated successfully.')</script>";
+            } else {
+                // If the product does not exist, insert a new entry
+                $stmt_insert = $conn->prepare("INSERT INTO cart_details (product_id, buyer_id, quantity) VALUES (:product_id, :buyer_id, :quantity)");
+                $stmt_insert->execute([
+                    'product_id' => $product_id,
+                    'buyer_id' => $buyer_id,
+                    'quantity' => $quantity
+                ]);
+                echo "<script>alert('Product added to cart successfully.')</script>";
+            }
+        }
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id;
-    $cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-    $cartcount_result = $conn->query($cartcount);
-    
-    // Check if the query executed successfully
-    if ($cartcount_result) {
-        // Fetch the result
-        $row = $cartcount_result->fetch_assoc();
+        // Redirect to prevent form resubmission
+        header("Location: ".$_SERVER['PHP_SELF']);
+        exit();
     }
-    
-
-
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -79,7 +77,7 @@ if(isset($_SESSION['username'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Products</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -88,7 +86,6 @@ if(isset($_SESSION['username'])) {
         location.reload();
     }
     </script>
-
 </head>
 <body>
 
@@ -104,8 +101,8 @@ if(isset($_SESSION['username'])) {
             <li class="icon">
                 <div class="cart">
                     <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                    <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                    <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
                 </div>
             </li>
@@ -130,9 +127,9 @@ if(isset($_SESSION['username'])) {
     <div class="pro-container">
         <?php
         // Loop through each product fetched from the database
-        while ($row = mysqli_fetch_assoc($result)) {
+        foreach ($products as $row) {
             $image = empty($row['photo']) ? '../images/xyz.png' : '../images/' . $row['photo'];
-            $product_id = $row['product_id']; // Assuming 'product_id' is the primary key column in your 'product_details' table
+            $product_id = $row['product_id']; 
             $name = $row['name'];
             $price = $row['price'];
 ?>
@@ -140,20 +137,20 @@ if(isset($_SESSION['username'])) {
             <div class="pro" onclick="window.location.href='product_detail.php?product_id=<?php echo $product_id; ?>'">
             <img src="<?php echo $image; ?>" alt="">
             <div class="des">
-                <h5><?php echo $name; ?></h5>
+                <h5><?php echo htmlspecialchars($name); ?></h5>
                 
                 <?php 
                         if ($row['quantity'] > 0) {
                             ?>
                             <h4>₹<?php echo $price; ?></h4>
                         <?php } else {
-                            // echo "Out of stock";?>
+                            ?>
                             <h2 class="out-of-stock" style="color: red;">Out of Stock</h2>
                             <?php
                         } 
                     ?>
             </div>
-            <form method="post" class="cart_form" action="">
+            <form method="post" class="cart_form" action="" onclick="event.stopPropagation();">
                     <input type="hidden" name="product_id" value="<?php echo $product_id; ?>">
                     <?php if ($row['quantity'] > 0): ?>
                         <button class="cart" type="submit" name="add_to_cart_short_cut">
@@ -172,7 +169,5 @@ if(isset($_SESSION['username'])) {
 <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
 <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 </body>
-<?php
-    include ("footer.php");
-?>
+<?php include ("footer.php"); ?>
 </html>

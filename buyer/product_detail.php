@@ -2,83 +2,79 @@
 include("../database/connection.php");
 include("../session/session_start.php");
 
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
-}
-$buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-$buyer_id_result = mysqli_query($conn, $buyer_id_query);
-$buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-$buyer_id = $buyer_id_row['buyer_id'];
-// echo $buyer_id;
+$username = $_SESSION['username'] ?? null;
+$buyer_id = null;
+$name = $mrp = $price = $quantity = $description = $image1 = $image2 = $image3 = null;
+$cart_row = ['product_count' => 0];
 
-if(isset($_GET['product_id'])) {
-    $product_id = mysqli_real_escape_string($conn, $_GET['product_id']);
-    $query = "SELECT * FROM product_details WHERE product_id = '$product_id'";
-    $result = mysqli_query($conn, $query);
-
-    if(mysqli_num_rows($result) > 0) {
-        $row = mysqli_fetch_assoc($result);
-        $name = $row['name'];
-        $mrp = $row['mrp'];
-        $price = $row['price'];
-        $quantity = $row['quantity'];
-        $description = $row['description'];
-        $image1 = empty($row['photo']) ? '../images/xyz.png' : $row['photo'];
-        $image2 = empty($row['photo']) ? '../images/xyz.png' : $row['photo2'];
-        $image3 = empty($row['photo']) ? '../images/xyz.png' : $row['photo3'];
+try {
+    if ($username) {
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        $buyer_id = $buyer_id_row['buyer_id'] ?? null;
     }
-}
 
-if(isset($_POST['add_to_cart'])) {
-    $product_id = mysqli_real_escape_string($conn, $_POST['product_id']);
-    $requested_quantity = (int)$_POST['quantity'];
+    if(isset($_GET['product_id'])) {
+        $product_id = $_GET['product_id'];
+        $stmt_prod = $conn->prepare("SELECT * FROM product_details WHERE product_id = :id");
+        $stmt_prod->execute(['id' => $product_id]);
+        $row = $stmt_prod->fetch();
 
-    if($requested_quantity > $quantity) {
-        echo "<script>alert('Not enough quantity available.')</script>";
-    } else {
-        $check_query = "SELECT * FROM cart_details WHERE product_id = '$product_id' AND buyer_id = '$buyer_id'";
-        $check_result = mysqli_query($conn, $check_query);
-        
-        if(mysqli_num_rows($check_result) > 0) {
-            $row = mysqli_fetch_assoc($check_result);
-            $existing_quantity = (int)$row['quantity'];
-            $new_quantity = $existing_quantity + $requested_quantity;
-
-            if($new_quantity > $quantity) {
-                echo "<script>alert('Not enough quantity available.')</script>";
-            } else {
-                $update_query = "UPDATE cart_details SET quantity = $new_quantity WHERE product_id = '$product_id' AND buyer_id = '$buyer_id'";
-                $update_result = mysqli_query($conn, $update_query);
-
-                if($update_result) {
-                    echo "<script>alert('Quantity updated successfully.')</script>";
-                } else {
-                    echo "<script>alert('Failed to update quantity. Please try again.')</script>";
-                }
-            }
-        } else {
-            $insert_query = "INSERT INTO cart_details (product_id, buyer_id, quantity) VALUES ('$product_id', '$buyer_id', '$requested_quantity')";
-            $insert_result = mysqli_query($conn, $insert_query);
-
-            if($insert_result) {
-                echo "<script>alert('Product added to cart successfully.')</script>";
-            } else {
-                echo "<script>alert('Failed to add product to cart. Please try again.')</script>";
-            }
+        if($row) {
+            $name = $row['name'];
+            $mrp = $row['mrp'];
+            $price = $row['price'];
+            $quantity = $row['quantity'];
+            $description = $row['description'];
+            $image1 = empty($row['photo']) ? 'xyz.png' : $row['photo'];
+            $image2 = empty($row['photo2']) ? 'xyz.png' : $row['photo2'];
+            $image3 = empty($row['photo3']) ? 'xyz.png' : $row['photo3'];
         }
     }
-    header("Location: ".$_SERVER['PHP_SELF']."?product_id=$product_id");
-    exit();
+
+    if(isset($_POST['add_to_cart'])) {
+        $product_id = $_POST['product_id'];
+        $requested_quantity = (int)$_POST['quantity'];
+
+        if (!$buyer_id) {
+            echo "<script>alert('Please login to add products to cart.')</script>";
+        } elseif($requested_quantity > $quantity) {
+            echo "<script>alert('Not enough quantity available.')</script>";
+        } else {
+            $stmt_check = $conn->prepare("SELECT * FROM cart_details WHERE product_id = :pid AND buyer_id = :bid");
+            $stmt_check->execute(['pid' => $product_id, 'bid' => $buyer_id]);
+            $existing_cart = $stmt_check->fetch();
+            
+            if($existing_cart) {
+                $existing_quantity = (int)$existing_cart['quantity'];
+                $new_quantity = $existing_quantity + $requested_quantity;
+
+                if($new_quantity > $quantity) {
+                    echo "<script>alert('Not enough quantity available.')</script>";
+                } else {
+                    $stmt_update = $conn->prepare("UPDATE cart_details SET quantity = :new_qty WHERE product_id = :pid AND buyer_id = :bid");
+                    $stmt_update->execute(['new_qty' => $new_quantity, 'pid' => $product_id, 'bid' => $buyer_id]);
+                    echo "<script>alert('Quantity updated successfully.')</script>";
+                }
+            } else {
+                $stmt_insert = $conn->prepare("INSERT INTO cart_details (product_id, buyer_id, quantity) VALUES (:pid, :bid, :qty)");
+                $stmt_insert->execute(['pid' => $product_id, 'bid' => $buyer_id, 'qty' => $requested_quantity]);
+                echo "<script>alert('Product added to cart successfully.')</script>";
+            }
+        }
+        header("Location: ".$_SERVER['PHP_SELF']."?product_id=$product_id");
+        exit();
+    }
+
+    if ($buyer_id) {
+        $stmt_cartcount = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :bid");
+        $stmt_cartcount->execute(['bid' => $buyer_id]);
+        $cart_row = $stmt_cartcount->fetch();
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
-
-
-$cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-$cartcount_result = mysqli_query($conn, $cartcount);
-    
-if ($cartcount_result) {
-    $row = mysqli_fetch_assoc($cartcount_result);
-} 
-    
 ?>
 
 <!DOCTYPE html>
@@ -86,7 +82,7 @@ if ($cartcount_result) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Products Details</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -115,18 +111,18 @@ if ($cartcount_result) {
             <li class="icon">
                 <div class="cart">
                     <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                    <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                    <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
-
-                    </div>
+                </div>
+            </li>
             <li class="dropdown"><a href="#" class="dropbtn"><ion-icon name="person-outline"></ion-icon></a>
-                        <div class="dropdown-content">
-                              <a href="profile.php"><ion-icon name="person-circle-outline"></ion-icon> Profile</a>
-                              <a href="#"><ion-icon name="cube-outline"></ion-icon> Orders</a>
-                              <a href="#"><ion-icon name="log-out-outline"></ion-icon> Log Out</a>
-                        </div>
-                    </li>
+                <div class="dropdown-content">
+                    <a href="profile.php"><ion-icon name="person-circle-outline"></ion-icon> Profile</a>
+                    <a href="order.php"><ion-icon name="cube-outline"></ion-icon> Orders</a>
+                    <a href="../login/logout.php"><ion-icon name="log-out-outline"></ion-icon> Log Out</a>
+                </div>
+            </li>
         </ul>
     </div>
 </section>
@@ -134,30 +130,28 @@ if ($cartcount_result) {
 <section id="productdetails" class="section-p1">
     <?php if(isset($name)): ?>
     <div class="single-product-image">
-        <img src="../images/<?php echo $image1; ?>" width="100%" id="MainImg" alt="Main Image">
+        <img src="../images/<?php echo htmlspecialchars($image1); ?>" width="100%" id="MainImg" alt="Main Image">
 
         <div class="small-img-group">
             <div class="small-img-col">
-                <img src="../images/<?php echo $image1; ?>" width="100%" class="small-img" alt="Small Image 1">
-            </div>
-
-            <div class="small-img-col">
-                <img src="../images/<?php echo $image2; ?>" width="100%" class="small-img" alt="Small Image 2">
+                <img src="../images/<?php echo htmlspecialchars($image1); ?>" width="100%" class="small-img" alt="Small Image 1">
             </div>
             <div class="small-img-col">
-                <img src="../images/<?php echo $image3; ?>" width="100%" class="small-img" alt="Small Image 3">
+                <img src="../images/<?php echo htmlspecialchars($image2); ?>" width="100%" class="small-img" alt="Small Image 2">
+            </div>
+            <div class="small-img-col">
+                <img src="../images/<?php echo htmlspecialchars($image3); ?>" width="100%" class="small-img" alt="Small Image 3">
             </div>
         </div>
     </div>
 
     <div class="single-product-details">
-        <h1><?php echo $name; ?></h1>
+        <h1><?php echo htmlspecialchars($name); ?></h1>
         <br>
         <?php if($quantity > 0): ?>
             <div class="mrp">
                 <b><strike>₹<?php echo $mrp; ?></strike></b>
                 <h2>₹<?php echo $price; ?></h2>
-
             </div>
             <form method="post" action="">
                 <br>
@@ -169,10 +163,10 @@ if ($cartcount_result) {
             <h2 class="out-of-stock">Out of Stock</h2>
         <?php endif; ?>
         <h4>Product Details</h4>
-        <span><?php echo $description; ?></span>
+        <span><?php echo nl2br(htmlspecialchars($description)); ?></span>
     </div>
     <?php else: ?>
-    <p>No product found.</p>
+    <center><p>No product found.</p></center>
     <?php endif; ?>
 </section>
 
@@ -181,19 +175,12 @@ if ($cartcount_result) {
 
 <script>
    var MainImg = document.getElementById("MainImg");
-   var smallimg =document.getElementsByClassName("small-img");
+   var smallimg = document.getElementsByClassName("small-img");
 
-   smallimg[0].onclick =function(){
-     MainImg.src = smallimg[0].src;
-   }
-   smallimg[1].onclick =function(){
-     MainImg.src = smallimg[1].src;
-   }
-   smallimg[2].onclick =function(){
-     MainImg.src = smallimg[2].src;
-   }
-   smallimg[3].onclick =function(){
-     MainImg.src = smallimg[3].src;
+   for(let i=0; i<smallimg.length; i++) {
+       smallimg[i].onclick = function() {
+            MainImg.src = smallimg[i].src;
+       }
    }
 </script>
 
@@ -203,4 +190,3 @@ include ("8_product.php");
 include ("footer.php");
 ?>
 </html>
-

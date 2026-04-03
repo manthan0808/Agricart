@@ -3,29 +3,36 @@ include ("../database/connection.php");
 include ("../session/session_start.php");
 include("../session/session_check.php");
 
-// query to take data from database in popup menu and table
-// Modify your SQL query to fetch details of all orders without any specific conditions
-$query = "SELECT o.order_id, o.order_no, p.name AS product_name, bd.full_name AS buyer_name, 
-          sd.first_name AS seller_name, o.payment, o.price, o.quantity, o.status, o.order_date, o.tracking_no
-          FROM order_details o 
-          JOIN product_details p ON o.product_id = p.product_id 
-          JOIN buyer_details bd ON o.buyer_id = bd.buyer_id 
-          JOIN seller_details sd ON o.seller_id = sd.seller_id";
-$result = mysqli_query($conn, $query);
+$orders = [];
+$totalOrders = 0;
+$totalIncome = 0;
 
+try {
+    // Main query to fetch details of all orders
+    $query = "SELECT o.order_id, o.order_no, p.name AS product_name, bd.full_name AS buyer_name, 
+              sd.first_name AS seller_name, o.payment, o.price, o.quantity, o.status, o.order_date, o.tracking_no
+              FROM order_details o 
+              JOIN product_details p ON o.product_id = CAST(p.product_id AS VARCHAR) -- Handle potential type mismatch if needed
+              JOIN buyer_details bd ON o.buyer_id = bd.buyer_id 
+              JOIN seller_details sd ON o.seller_id = sd.seller_id";
+    
+    // Note: product_id in order_details might be VARCHAR in some schemas, while serial in product_details.
+    // In our schema check, order_details.product_id is VARCHAR(50).
+    
+    $stmt = $conn->query($query);
+    $orders = $stmt->fetchAll();
 
-// query for tatal order
-$orderQuery = "SELECT COUNT(*) AS totalOrders FROM order_details";
-$orderResult = mysqli_query($conn, $orderQuery);
-$orderData = mysqli_fetch_assoc($orderResult);
-$totalOrders = $orderData['totalOrders'];
+    // Total orders
+    $stmt_count = $conn->query("SELECT COUNT(*) FROM order_details");
+    $totalOrders = $stmt_count->fetchColumn();
 
-// Calculate total income
-$incomeQuery = "SELECT SUM(price) AS totalIncome FROM order_details";
-$incomeResult = mysqli_query($conn, $incomeQuery);
-$incomeData = mysqli_fetch_assoc($incomeResult);
-$totalIncome = $incomeData['totalIncome'];
+    // Total income
+    $stmt_income = $conn->query("SELECT SUM(price * quantity) FROM order_details");
+    $totalIncome = $stmt_income->fetchColumn() ?? 0;
 
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 
 <!DOCTYPE html>
@@ -48,7 +55,7 @@ $totalIncome = $incomeData['totalIncome'];
             <div class="header-title-wrapper">
                 <div class="header-title">
                     <h1>Orders</h1>
-                    <p>Display Information About Website Orders<span class="las la-chart-lin"></span></p>
+                    <p>Display Information About Website Orders <span class="las la-chart-lin"></span></p>
                 </div>
             </div>
         </header>
@@ -62,7 +69,7 @@ $totalIncome = $incomeData['totalIncome'];
                             <span class="las la-eye"></span>
                         </div>
                         <div class="analytic-info">
-                            <h4>Today Sales</h4>
+                            <h4>Total Sales</h4>
                             <h1>₹<?php echo number_format($totalIncome, 2); ?></h1>
                         </div>
                     </div>
@@ -83,7 +90,7 @@ $totalIncome = $incomeData['totalIncome'];
                 <div class="head">
                 <h3>Total Order</h3>
                 <form id="download">
-                    <button class="d" onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
+                    <button type="button" class="d" onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
                  </form>
             </div>
                     <div class="table-data">
@@ -91,7 +98,7 @@ $totalIncome = $incomeData['totalIncome'];
                             <table id="table">
                                 <thead>
                                     <tr>
-                                        <th>Order_no</th>
+                                        <th>Order No.</th>
                                         <th>Product Name</th>
                                         <th>Price</th>
                                         <th>Payment</th>
@@ -101,23 +108,15 @@ $totalIncome = $incomeData['totalIncome'];
                                 </thead>
                                 <tbody>
                                     <?php 
-                                    if (mysqli_num_rows($result) > 0) {
-                                        while($row = mysqli_fetch_assoc($result)){
+                                    if (!empty($orders)) {
+                                        foreach ($orders as $row) {
                                     ?>
                                             <tr>
-                                                <td><?php echo $row['order_no'];?></td>
-                                                <td><?php echo $row['product_name'];?></td>
-                                                <td><?php echo $row['price'];?></td>
-                                                <?php if($row['payment'] == 0){?>
-                                                    <td>Cash</td><?php
-                                                }else{
-                                                    ?><td>Online</td><?php
-                                                }?>
-                                                <?php if($row['status'] == 0){?>
-                                                    <td>Pending</td><?php
-                                                }else{
-                                                    ?><td>shipped</td><?php
-                                                }?>
+                                                <td><?php echo htmlspecialchars($row['order_no'] ?? ''); ?></td>
+                                                <td><?php echo htmlspecialchars($row['product_name'] ?? ''); ?></td>
+                                                <td>₹<?php echo number_format($row['price'] ?? 0); ?></td>
+                                                <td><?php echo ($row['payment'] == 0) ? 'Cash' : 'Online'; ?></td>
+                                                <td><?php echo ($row['status'] == 0) ? 'Pending' : 'Shipped'; ?></td>
                                                 <td>
                                                     <button class="a" onclick="openPopup(<?php echo $row['order_id']; ?>)"><i class="fa-solid fa-magnifying-glass"></i> Views</button>
                                                     <div class="overlay" id="overlay_<?php echo $row['order_id']; ?>">
@@ -130,88 +129,81 @@ $totalIncome = $incomeData['totalIncome'];
                                                                     <tr>
                                                                         <td>Order Number</td>
                                                                         <td>
-                                                                            <div id="orderIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['order_id']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['order_no'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Tracking Number</td>
                                                                         <td>
-                                                                            <div id="orderIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['tracking_no']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['tracking_no'] ?? '-'); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Product Name</td>
                                                                         <td>
-                                                                            <div id="productNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['product_name']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['product_name'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Buyer Name</td>
                                                                         <td>
-                                                                            <div id="buyerNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['buyer_name']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['buyer_name'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Seller Name</td>
                                                                         <td>
-                                                                            <div id="sellerNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['seller_name']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo htmlspecialchars($row['seller_name'] ?? ''); ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Price</td>
                                                                         <td>
-                                                                            <div id="priceDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['price']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;">₹<?php echo number_format($row['price'] ?? 0); ?></div>
+                                                                        </td>
+                                                                    </tr>
+                                                                    <tr>
+                                                                        <td>Quantity</td>
+                                                                        <td>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo $row['quantity'] ?? 0; ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Payment</td>
                                                                         <td>
-                                                                            <div id="paymnetDisplay" >
-                                                                                <?php if($row['payment'] == 0): ?>
-                                                                                    <input type="text" value="Cash" readonly>
-                                                                                <?php else: ?>
-                                                                                    <input type="text" value="Online" readonly>
-                                                                                <?php endif; ?>
-                                                                            </div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo ($row['payment'] == 0) ? 'Cash' : 'Online'; ?></div>
                                                                         </td>
                                                                     </tr>
                                                                     <tr>
                                                                         <td>Order Status</td>
                                                                         <td>
-                                                                            <div id="orderstatusDisplay">
-                                                                                <?php if($row['status'] == 0): ?>
-                                                                                    <input type="text" value="Pending" readonly>
-                                                                                <?php else: ?>
-                                                                                    <input type="text" value="Shipped" readonly>
-                                                                                <?php endif; ?>
-                                                                            </div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo ($row['status'] == 0) ? 'Pending' : 'Shipped'; ?></div>
                                                                         </td>
                                                                     </tr>
-
                                                                     <tr>
                                                                         <td>Order Date</td>
                                                                         <td>
-                                                                            <div id="orderDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['order_date']; ?></div>
+                                                                            <div style="border: 1px solid #ccc; padding: 5px; width: 700px; min-height: 50px;"><?php echo $row['order_date'] ?? ''; ?></div>
                                                                         </td>
                                                                     </tr>
-                                                                    
                                                                 </table>
+                                                            </div>
                                                             </form>
                                                         </div>
                                                     </div>
                                                 </td>
                                             </tr>
-                                            <?php
-                                            }
-                                        } else {?>
-                                            <tr>
-                                                <td colspan="6">
-                                                    <p class='no-data-found'>No order data found.</p>
-                                                </td>
-                                            </tr>
-                                        <?php
+                                    <?php
                                         }
-                                       ?>
+                                    } else {?>
+                                        <tr>
+                                            <td colspan="6">
+                                                <p class='no-data-found'>No order data found.</p>
+                                            </td>
+                                        </tr>
+                                    <?php
+                                    }
+                                   ?>
                                 </tbody>
                             </table>
                         </div>
@@ -230,13 +222,9 @@ $totalIncome = $incomeData['totalIncome'];
             document.getElementById("overlay_" + orderId).style.display = "none";
         }
         function downloadCSV() {
-    // Open a new window or iframe to trigger the download
-    var downloadWindow = window.open('fetch_details/fetch_order_details.php', '_blank');
-    downloadWindow.focus();
-}
-
-
-
+            var downloadWindow = window.open('fetch_details/fetch_order_details.php', '_blank');
+            downloadWindow.focus();
+        }
     </script>
     
 </body>

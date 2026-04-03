@@ -1,0 +1,35 @@
+{
+  "functions": {
+    "api/**/*.php": {
+      "runtime": "vercel-php@latest"
+    },
+    "*.php": {
+      "runtime": "vercel-php@latest"
+    },
+    "buyer/**/*.php": {
+      "runtime": "vercel-php@latest"
+    },
+    "seller/**/*.php": {
+      "runtime": "vercel-php@latest"
+    },
+    "login/**/*.php": {
+      "runtime": "vercel-php@latest"
+    },
+    "admin/**/*.php": {
+      "runtime": "vercel-php@latest"
+    }
+  },
+  "routes": [
+    {
+      "src": "/",
+      "dest": "/login/login.php"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
+  "env": {
+    "DB_TYPE": "pgsql"
+  }
+}

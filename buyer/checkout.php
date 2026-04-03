@@ -11,6 +11,9 @@ $order_no = $_SESSION['order_no'];
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
     <style>
+        body {
+            background-color:  #cce7d0; /* Set the background color of the entire page to red */
+        }
         
         .inner{
             background: #cce7d0;
@@ -21,7 +24,7 @@ $order_no = $_SESSION['order_no'];
         }
         .inner button{
             background: #088178;
-            width: 15%;
+            width: 75px;
             height: 10px;
             border-radius: 10px;
             padding-bottom: 50px;

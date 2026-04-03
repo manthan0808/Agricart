@@ -1,33 +1,27 @@
 <?php
-include ("..\..\database\connection.php");
+include ("../../database/connection.php");
 
-// Fetch data from the product_details table
-$query = "SELECT product_details.*, seller_details.first_name AS seller_name FROM product_details
-          LEFT JOIN seller_details ON product_details.seller_id = seller_details.seller_id";
-$result = mysqli_query($conn, $query);
+try {
+    $query = "SELECT product_details.*, seller_details.first_name AS seller_name FROM product_details
+              LEFT JOIN seller_details ON product_details.seller_id = seller_details.seller_id";
+    $stmt = $conn->query($query);
+    $products = $stmt->fetchAll();
 
-// Generate CSV content
-$csvContent = "Product Name,Photo,Photo2,Photo3,Seller Name,Price,Quantity,Description\n";
+    $csvContent = "Product Name,Seller Name,Price,Quantity,Description,Photo1,Photo2,Photo3\n";
 
-while ($row = mysqli_fetch_assoc($result)) {
-    $photoFilename = $row['photo'];
-    $photoUri = "../../images/" . $photoFilename;
-    $photoFilename = $row['photo2']; 
-    $photoUri2 = "../../images/" . $photoFilename;
-    $photoFilename = $row['photo3'];
-    $photoUri3 = "../../images/" . $photoFilename;
-    $description = str_replace("\n", " ", $row['description']); // Replace newlines with spaces in the description
-    $description = str_replace('"', '""', $description); // Escape double quotes within the description
-    $csvContent .= "{$row['name']},{$photoUri},{$photoUri2},{$photoUri3},{$row['seller_name']},{$row['price']},{$row['quantity']},\"{$description}\"\n"; // Wrap description in double quotes
+    foreach ($products as $row) {
+        $name = str_replace('"', '""', $row['name'] ?? '');
+        $seller_name = str_replace('"', '""', $row['seller_name'] ?? '');
+        $description = str_replace('"', '""', $row['description'] ?? '');
+        
+        $csvContent .= "\"{$name}\",\"{$seller_name}\",{$row['price']},{$row['quantity']},\"{$description}\",{$row['photo']},{$row['photo2']},{$row['photo3']}\n";
+    }
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="product_details.csv"');
+    echo $csvContent;
+
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
-
-// Set headers for CSV download
-header('Content-Type: text/csv');
-header('Content-Disposition: attachment; filename="product_details.csv"');
-
-// Output CSV content
-echo $csvContent;
-
-// Close the database connection
-mysqli_close($conn);
 ?>

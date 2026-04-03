@@ -1,30 +1,25 @@
 <?php
-include ("..\..\database\connection.php");
+include ("../../database/connection.php");
 
-// Fetch data from the buyer_details table
-$query = "SELECT * FROM buyer_details";
-$result = mysqli_query($conn, $query);
+try {
+    $stmt = $conn->query("SELECT * FROM buyer_details");
+    $buyers = $stmt->fetchAll();
 
-// Generate CSV content
-$csvContent = "Name,Photo,Email,Contact,Address,State,Pin code,Created On\n";
+    $csvContent = "Full Name,Email,Contact,Address,State,Pin code,Created On\n";
 
-while ($row = mysqli_fetch_assoc($result)) {
-    $photoFilename = $row['photo'];
-    $photoUri = "../../images/" . $photoFilename;
-    $address = str_replace("\n", "\\n", $row['address']);
-    $state = str_replace("\n", "\\n", $row['state']);
+    foreach ($buyers as $row) {
+        $full_name = str_replace('"', '""', $row['full_name']);
+        $address = str_replace('"', '""', $row['address']);
+        $state = str_replace('"', '""', $row['state']);
+        
+        $csvContent .= "\"{$full_name}\",{$row['email']},{$row['contact_no']},\"{$address}\",\"{$state}\",{$row['pin_code']},{$row['created_on']}\n";
+    }
 
-    // Concatenate CSV row with properly formatted data
-    $csvContent .= "{$row['full_name']},{$photoUri},{$row['email']},{$row['contact_no']},\"{$address}\",\"{$state}\",{$row['pin_code']},{$row['created_on']}\n";
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="buyer_details.csv"');
+    echo $csvContent;
+
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
-
-// Set headers for CSV download
-header('Content-Type: text/csv');
-header('Content-Disposition: attachment; filename="buyer_details.csv"');
-
-// Output CSV content
-echo $csvContent;
-
-// Close the database connection
-mysqli_close($conn);
 ?>

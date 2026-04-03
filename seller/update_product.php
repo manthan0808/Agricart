@@ -4,74 +4,52 @@ include("../session/session_check.php");
 include("../database/connection.php");
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Retrieve form data
-    $product_id = $_POST['product_id'];
-    $name = $_POST['name'];
-    $description = $_POST['description'];
-    $price = $_POST['price'];
-    $quantity = $_POST['quantity'];
+    try {
+        // Retrieve form data
+        $product_id = $_POST['product_id'];
+        $name = $_POST['name'];
+        $description = $_POST['description'];
+        $mrp = $_POST['mrp'] ?? $_POST['price']; // Fallback if missing
+        $price = $_POST['price'];
+        $quantity = $_POST['quantity'];
 
-    // File upload handling
-    $target_dir = "../images/";
-    $target_file = $target_dir . basename($_FILES["image"]["name"]);
-    $target_file2 = $target_dir . basename($_FILES["image2"]["name"]);
-    $target_file3 = $target_dir . basename($_FILES["image3"]["name"]);
-    $uploadOk = 1;
-    $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
-
-    // Check if image file is a actual image or fake image
-    if (isset($_POST["submit"])) {
-        $check = getimagesize($_FILES["image"]["tmp_name"]);
-        if ($check !== false) {
-            $uploadOk = 1;
-        } else {
-            echo "File is not an image.";
-            $uploadOk = 0;
+        // File upload handling helper
+        function handleUpload($file_key, $product_id, $column_name, $conn) {
+            if (isset($_FILES[$file_key]) && $_FILES[$file_key]['error'] == UPLOAD_ERR_OK) {
+                $filename = basename($_FILES[$file_key]["name"]);
+                $target_file = "../images/" . $filename;
+                
+                if (move_uploaded_file($_FILES[$file_key]["tmp_name"], $target_file)) {
+                    $stmt = $conn->prepare("UPDATE product_details SET $column_name = :file WHERE product_id = :id");
+                    $stmt->execute(['file' => $filename, 'id' => $product_id]);
+                    return true;
+                }
+            }
+            return false;
         }
+
+        // Handle images 1, 2, and 3
+        handleUpload('image', $product_id, 'photo', $conn);
+        handleUpload('image2', $product_id, 'photo2', $conn);
+        handleUpload('image3', $product_id, 'photo3', $conn);
+
+        // Update the database with other product details
+        $update_sql = "UPDATE product_details SET name = :name, description = :desc, mrp = :mrp, price = :price, quantity = :qty WHERE product_id = :id";
+        $stmt_update = $conn->prepare($update_sql);
+        $stmt_update->execute([
+            'name' => $name,
+            'desc' => $description,
+            'mrp' => $mrp,
+            'price' => $price,
+            'qty' => $quantity,
+            'id' => $product_id
+        ]);
+
+        // Redirect back to the product page after updating
+        header("Location: products.php?alert=update_success");
+        exit;
+    } catch (PDOException $e) {
+        die("Update failed: " . $e->getMessage());
     }
-
-    // Check if file already exists
-    if (file_exists($target_file)) {
-        echo "Sorry, file already exists.";
-        $uploadOk = 0;
-    }
-
-    // Check file size
-    if ($_FILES["image"]["size"] > 500000) {
-        echo "Sorry, your file is too large.";
-        $uploadOk = 0;
-    }
-
-    // Allow certain file formats
-    if ($imageFileType != "jpg" && $imageFileType != "png" && $imageFileType != "jpeg"
-        && $imageFileType != "gif") {
-        echo "Sorry, only JPG, JPEG, PNG & GIF files are allowed.";
-        $uploadOk = 0;
-    }
-
-    // Check if $uploadOk is set to 0 by an error
-    if ($uploadOk == 0) {
-        echo "Sorry, your file was not uploaded.";
-    // if everything is ok, try to upload file
-    } else {
-        if (move_uploaded_file($_FILES["image"]["tmp_name"], $target_file)) {
-            echo "The file " . basename($_FILES["image"]["name"]) . " has been uploaded.";
-            // Update the database with the new image filename
-            $update_query = "UPDATE product_details SET photo = '".basename($_FILES["image"]["name"])."' WHERE product_id = '$product_id'";
-            mysqli_query($conn, $update_query);
-        } else {
-            echo "Sorry, there was an error uploading your file.";
-        }
-    }
-
-    // Similar processing for image2 and image3
-
-    // Update the database with other product details
-    $update_query = "UPDATE product_details SET name = '$name', description = '$description', price = '$price', quantity = '$quantity' WHERE product_id = '$product_id'";
-    mysqli_query($conn, $update_query);
-
-    // Redirect back to the product page after updating
-    header("Location: products.php");
-    exit;
 }
 ?>

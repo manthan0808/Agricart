@@ -1,0 +1,16 @@
+# Database credentials and configuration
+database/connection.php
+
+# PHP & Server temp files
+*.log
+.htaccess
+.DS_Store
+Thumbs.db
+
+# IDE & Editor folders
+.vscode/
+.idea/
+
+# OS generated files
+ehthumbs.db
+Icon?

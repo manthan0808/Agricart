@@ -5,18 +5,26 @@ include("../database/connection.php");
 
 // Fetch shop details for the specific user from the database
 $seller_username = $_SESSION['username'];
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+$seller_id = null;
 
+try {
+    $stmt_seller = $conn->prepare("SELECT seller_id FROM seller_details WHERE email = :email");
+    $stmt_seller->execute(['email' => $seller_username]);
+    $seller_row = $stmt_seller->fetch();
+    
+    if ($seller_row) {
+        $seller_id = $seller_row['seller_id'];
+    }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 
 <!DOCTYPE html>
 <html>
 
 <head>
-    <title>Shop List</title>
+    <title>Account Details</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -24,21 +32,17 @@ $seller_id = $seller_id_row['seller_id'];
         crossorigin="anonymous" referrerpolicy="no-referrer" />
         <style>
             .box-8{
-                background: c4ecd0;
+                background: #c4ecd0;
                 width: 69%;
                 height: 80%;
             }
         </style>
-
-    
 </head>
 
 <body>
     <!-- <?php include("navigation.php"); ?> -->
 
     <div id="main">
-        
-
         <div class="clearfix"></div>
         <br />
 
@@ -53,31 +57,30 @@ $seller_id = $seller_id_row['seller_id'];
                     <form method="post" action="verify_account_process.php" enctype="multipart/form-data">
                         <table>
                             <tr>
-                                <label for="shop_name">First Name:</label><br>
-                                <input type="text" id="shop_name" name="first_name" required><br>
-                                <label for="shop_name">last Name:</label><br>
-                                <input type="text" id="shop_name" name="last_name" required><br>
+                                <td>
+                                <label for="first_name">First Name:</label><br>
+                                <input type="text" id="first_name" name="first_name" required><br>
+                                <label for="last_name">Last Name:</label><br>
+                                <input type="text" id="last_name" name="last_name" required><br>
                                 <label for="image1">Upload your Image:</label><br>
-                                <input type="file" id="image1" name="image" required><br>
-                                <label for="shop_name">Government ID:</label><br>
-                                <input type="file" id="shop_name" name="gov_id" required>
-                                (eg: aadhar card, pan card, driving licence)
+                                <input type="file" id="image1" name="image" accept="image/*" required><br>
+                                <label for="gov_id">Government ID:</label><br>
+                                <input type="file" id="gov_id" name="gov_id" accept="image/*" required>
+                                <br>(eg: aadhar card, pan card, driving licence)
                                 <br>
                                 <br>
                                 <br> 
 
-                                <label for="shop_name">GST Number:</label><br>
-                                <input type="text" id="shop_name" name="gst_no"><br>
+                                <label for="gst_no">GST Number(optional):</label><br>
+                                <input type="text" id="gst_no" name="gst_no"><br>
 
                                 <div class="submit">
                                 <input type="submit" value="Submit">
                             </div>
+                                </td>
                             </tr>
-                            
-                            
-                            
                         </table>
-        </form>
+                    </form>
                     </div>
                 </div>
             </div>

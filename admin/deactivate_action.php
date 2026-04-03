@@ -1,26 +1,22 @@
 <?php
+include ("../database/connection.php");
 
 if(isset($_GET['seller_id']))
 {
-    deactivate();
+    deactivate($conn);
 }
 
-function deactivate()
-    {
-        $id = $_GET['seller_id'];
-        $con = mysqli_connect('localhost','root','');
-        if(!$con)
-        {
-            die("Connection was not successful");
-        }
-        else{
-            mysqli_select_db($con,'agricart');
-            $query = "UPDATE seller_details SET status = 1  WHERE seller_id = $id";
-            //echo $query;
-            $result = mysqli_query($con,$query);
-            header("location:seller.php");
-        }
+function deactivate($conn)
+{
+    $id = $_GET['seller_id'];
+    try {
+        $query = "UPDATE seller_details SET status = 1 WHERE seller_id = :id";
+        $stmt = $conn->prepare($query);
+        $stmt->bindParam(':id', $id, PDO::PARAM_INT);
+        $stmt->execute();
+        header("location:seller.php");
+    } catch (PDOException $e) {
+        die("Connection failed: " . $e->getMessage());
     }
-
-    
+}
 ?>

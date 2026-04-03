@@ -3,18 +3,22 @@
 if(isset($_POST['email'])) {
     $email = $_POST['email'];
 
-    include ("..\database\connection.php");
+    include ("../database/connection.php");
 
-    // Prepare SQL statement
-    $sql = "INSERT INTO newsletter (email) VALUES ('$email')";
+    try {
+        // Prepare SQL statement
+        $stmt = $conn->prepare("INSERT INTO newsletter (email) VALUES (:email)");
+        $run = $stmt->execute(['email' => $email]);
 
-    // Execute SQL statement
-    if ($conn->query($sql) === TRUE) {
-        header("location:index.php");
-    } else {
-        echo "Error: " . $sql . "<br>" . $conn->error;
+        // Execute SQL statement
+        if ($run) {
+            header("location:index.php");
+            exit();
+        } else {
+            echo "Failed to subscribe to newsletter.";
+        }
+    } catch (PDOException $e) {
+        die("Error: " . $e->getMessage());
     }
-
-    $conn->close();
 }
 ?>

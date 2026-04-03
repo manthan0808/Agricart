@@ -2,8 +2,14 @@
 include ("../database/connection.php");
 include ("../session/session_start.php");
 include("../session/session_check.php");
-$query = "SELECT * FROM seller_details WHERE verify = 1";
-$result = mysqli_query($conn, $query);
+
+$sellers = [];
+try {
+    $stmt = $conn->query("SELECT * FROM seller_details WHERE verify = 1");
+    $sellers = $stmt->fetchAll();
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
+}
 ?>
 
 <!DOCTYPE html>
@@ -25,17 +31,11 @@ $result = mysqli_query($conn, $query);
     <div class="main-content">
         <header>
             <div class="header-title-wrapper">
-
                 <div class="header-title">
-                    <h1>
-                        Seller
-                    </h1>
-                    <p>
-                        Display Information About Sellers<span class="las la-chart-lin"></span>
-                    </p>
+                    <h1>Seller</h1>
+                    <p>Display Information About Sellers<span class="las la-chart-lin"></span></p>
                 </div>
             </div>
-
         </header>
 
         <main>
@@ -44,18 +44,16 @@ $result = mysqli_query($conn, $query);
                 <div class="head">
             <h3>Total Seller</h3>
             <form id="download">
-                <!-- Move the download button inside the table head -->
-                <button onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
+                <button type="button" onclick="downloadCSV()"><i class="fa-solid fa-file-export"></i></button>
             </form>
         </div>
                     <section>
-
                         <div class="table-data">
                             <div class="order">
                                 <table id="table">
                                     <thead>
                                         <tr>
-                                            <th>#ID</th>
+                                            <th>Sr.no</th>
                                             <th>Photo</th>
                                             <th>Name</th>
                                             <th>Status</th>
@@ -65,30 +63,30 @@ $result = mysqli_query($conn, $query);
                                     </thead>
                                     <tbody>
                                         <?php 
-                                        if (mysqli_num_rows($result) > 0) {
-                                            while($row = mysqli_fetch_assoc($result)){
-                                        ?>
+                                        $counter = 1;
+                                        if (!empty($sellers)) {
+                                            foreach ($sellers as $row) { ?>
                                                 <tr>
-                                                    <td><?php echo $row['seller_id']; ?></td>
-                                                    <!-- <td><?php echo $row['photo']; ?></td> -->
+                                                <td><?php echo $counter++;?></td>
                                                     <td>
                                                         <?php
                                                         $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
                                                         echo "<img src='$image' alt='Seller Photo' style='width: 50px; height: 50px; border-radius: 50%;'>";
                                                         ?>
                                                     </td>
-                                                    <td><?php echo $row['first_name']; ?></td>
-                                                    <td><?php echo $row['status']; ?></td>
-                                                    <td><?php echo $row['created_on']; ?></td>
+                                                    <td><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></td>
+                                                    <td style="width: 200px;">
+                                                        <div class="status_inner_div" style="background-color: <?php echo ($row['status'] == 0) ? 'green' : 'red'; ?>;">
+                                                            <span style="font-size: 18px;"><?php echo ($row['status'] == 0) ? 'Active' : 'Inactive'; ?></span>
+                                                        </div>
+                                                    </td>
+                                                    <td><?php echo $row['created_on'] ?? ''; ?></td>
                                                     <td>
                                                         <button onclick="openPopup(<?php echo $row['seller_id']; ?>)"><i class="fa-solid fa-magnifying-glass"></i> Views</button>
-                                                        <!-- <a href="action.php?id=<?=$row['seller_id']?>" class="deactivate-button">deactivate</a> -->
                                                         <?php
                                                         if ($row['status'] == 0) {
-                                                            // Display Deactivate button
                                                             echo '<a href="deactivate_action.php?seller_id=' . $row['seller_id'] . '" class="deactivate-button"><i class="fa-solid fa-trash"></i> Deactivate</a>';
                                                         } elseif ($row['status'] == 1) {
-                                                            // Display Activate button
                                                             echo '<a href="activate_action.php?seller_id=' . $row['seller_id'] . '" class="activate-button"><i class="fa-solid fa-check"></i> Activate</a>';
                                                         }
                                                         ?>
@@ -99,14 +97,7 @@ $result = mysqli_query($conn, $query);
                                                                 <h2>Seller Details</h2>
                                                                 <form>
                                                                 <div style="max-height: 400px; overflow-y: auto;">
-                                                                    <!-- Adjust the following lines to display the correct details -->
                                                                     <table>
-                                                                        <tr>
-                                                                            <td>ID</td>
-                                                                            <td>
-                                                                                <div id="sellerIdDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['seller_id']; ?></div>
-                                                                            </td>
-                                                                        </tr>
                                                                         <tr>
                                                                             <td>Photo</td>
                                                                             <td>
@@ -121,76 +112,70 @@ $result = mysqli_query($conn, $query);
                                                                         <tr>
                                                                             <td>First Name</td>
                                                                             <td>
-                                                                                <div id="sellerNameDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['first_name']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['first_name'] ?? ''); ?></div>
                                                                             </td>
                                                                         </tr>
                                                                         <tr>
                                                                             <td>Last Name</td>
                                                                             <td>
-                                                                                <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['last_name']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['last_name'] ?? ''); ?></div>
                                                                             </td>
                                                                         </tr>
                                                                         <tr>
                                                                             <td>Email</td>
                                                                             <td>
-                                                                                <div id="sellerEmailDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['email']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['email']); ?></div>
                                                                             </td>
                                                                         </tr>
-                                                                        
                                                                         <tr>
                                                                             <td>Contact</td>
                                                                             <td>
-                                                                                <div id="sellerContactDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['contact_no']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['contact_no'] ?? ''); ?></div>
                                                                             </td>
                                                                         </tr>
                                                                         <tr>
                                                                             <td>Government Id</td>
                                                                             <td>
-                                                                                <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['government_id']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo htmlspecialchars($row['government_id'] ?? ''); ?></div>
                                                                             </td>
                                                                         </tr>
                                                                         <tr>
                                                                             <td>GST Number</td>
                                                                             <td>
-                                                                                <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;">
-                                                                                <?php if($row['gst_no'] == 0){ echo '-';}else{ echo $row['gst_no'];} ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;">
+                                                                                <?php echo (!empty($row['gst_no']) && $row['gst_no'] != 0) ? htmlspecialchars($row['gst_no']) : '-'; ?>
+                                                                                </div>
                                                                             </td>
                                                                         </tr>
                                                                         <tr>
                                                                             <td>Created On</td>
                                                                             <td>
-                                                                                <div id="sellerPhotoDisplay" style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['created_on']; ?></div>
+                                                                                <div style="border: 1px solid #ccc; padding: 5px; width: 700px; height: 50px;"><?php echo $row['created_on'] ?? ''; ?></div>
                                                                             </td>
                                                                         </tr>
                                                                     </table>
+                                                                </div>
                                                                 </form>
                                                             </div>
                                                         </div>
                                                     </td>
                                                 </tr>
-
                                         <?php
                                             }
-                                        } else {?>
+                                        } else { ?>
                                             <tr>
                                                 <td colspan="6">
                                                     <p class='no-data-found'>No seller data found.</p>
                                                 </td>
                                             </tr>
-                                        <?php
-                                        }
-                                       ?>
+                                        <?php } ?>
                                     </tbody>
                                 </table>
                             </div>
-
                         </div>
-
                     </section>
-
                 </div>
             </div>
-
         </main>
     </div>
 
@@ -203,9 +188,8 @@ $result = mysqli_query($conn, $query);
             document.getElementById("overlay_" + sellerId).style.display = "none";
         }
         function downloadCSV() {
-        // Open a new window or iframe to trigger the download
-        var downloadWindow = window.open('fetch_details/fetch_seller_details.php', '_blank');
-        downloadWindow.focus();
+            var downloadWindow = window.open('fetch_details/fetch_seller_details.php', '_blank');
+            downloadWindow.focus();
         }
 
         function filterSellers() {
@@ -216,33 +200,22 @@ $result = mysqli_query($conn, $query);
             tr = table.getElementsByTagName("tr");
 
             for (i = 0; i < tr.length; i++) {
-                // Reset display style for each row
                 tr[i].style.display = "";
-
-                // Loop through all columns in the current row
                 for (j = 0; j < tr[i].cells.length; j++) {
                     td = tr[i].cells[j];
                     if (td) {
                         txtValue = td.textContent || td.innerText;
-                        // If the column contains the search query, break out of the loop
                         if (txtValue.toUpperCase().indexOf(filter) > -1) {
                             break;
                         }
                     }
                 }
-
-                // If none of the columns contain the search query, hide the row
                 if (j === tr[i].cells.length) {
                     tr[i].style.display = "none";
                 }
             }
         }
-
     </script>
 
-
-    
-
 </body>
-
 </html>

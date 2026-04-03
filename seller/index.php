@@ -6,49 +6,62 @@ include("../database/connection.php");
 // Fetch seller's username from session
 $seller_username = $_SESSION['username'];
 
-// Query to fetch seller ID using the username
-$seller_id_query = "SELECT seller_id FROM seller_details WHERE email = '$seller_username'";
-$seller_id_result = mysqli_query($conn, $seller_id_query);
-$seller_id_row = mysqli_fetch_assoc($seller_id_result);
-$seller_id = $seller_id_row['seller_id'];
+try {
+    // Query to fetch seller ID using the username
+    $stmt_id = $conn->prepare("SELECT seller_id FROM seller_details WHERE email = :email");
+    $stmt_id->execute(['email' => $seller_username]);
+    $seller_id_row = $stmt_id->fetch();
+    
+    if (!$seller_id_row) {
+        die("Seller not found.");
+    }
+    $seller_id = $seller_id_row['seller_id'];
 
-// Query to fetch total sales
-$total_sales_query = "SELECT SUM(price * quantity) AS total_sales FROM order_details WHERE seller_id = '$seller_id'";
-$total_sales_result = mysqli_query($conn, $total_sales_query);
-$total_sales_row = mysqli_fetch_assoc($total_sales_result);
-$total_sales = $total_sales_row['total_sales'];
+    // Query to fetch total sales
+    $stmt_sales = $conn->prepare("SELECT SUM(price * quantity) AS total_sales FROM order_details WHERE seller_id = :id");
+    $stmt_sales->execute(['id' => $seller_id]);
+    $total_sales_row = $stmt_sales->fetch();
+    $total_sales = $total_sales_row['total_sales'] ?? 0;
 
-// Query to fetch total orders
-$total_orders_query = "SELECT COUNT(*) AS total_orders FROM order_details WHERE seller_id = '$seller_id'";
-$total_orders_result = mysqli_query($conn, $total_orders_query);
-$total_orders_row = mysqli_fetch_assoc($total_orders_result);
-$total_orders = $total_orders_row['total_orders'];
+    // Query to fetch total orders
+    $stmt_orders = $conn->prepare("SELECT COUNT(*) AS total_orders FROM order_details WHERE seller_id = :id");
+    $stmt_orders->execute(['id' => $seller_id]);
+    $total_orders_row = $stmt_orders->fetch();
+    $total_orders = $total_orders_row['total_orders'] ?? 0;
 
-// Query to fetch total products
-$total_products_query = "SELECT COUNT(*) AS total_products FROM product_details WHERE seller_id = '$seller_id'";
-$total_products_result = mysqli_query($conn, $total_products_query);
-$total_products_row = mysqli_fetch_assoc($total_products_result);
-$total_products = $total_products_row['total_products'];
+    // Query to fetch total products
+    $stmt_products = $conn->prepare("SELECT COUNT(*) AS total_products FROM product_details WHERE seller_id = :id");
+    $stmt_products->execute(['id' => $seller_id]);
+    $total_products_row = $stmt_products->fetch();
+    $total_products = $total_products_row['total_products'] ?? 0;
 
-// Query to fetch top 5 selling products
-$sql = "SELECT pd.name, 
-               SUM(od.quantity) AS total_sold, 
-               SUM(od.quantity * od.price) AS total_revenue
-        FROM order_details od
-        INNER JOIN product_details pd ON od.product_id = pd.product_id
-        WHERE pd.seller_id = '$seller_id'
-        GROUP BY od.product_id
-        ORDER BY total_sold DESC
-        LIMIT 5";
+    // Query to fetch top 5 selling products
+    // Using explicit table aliases for clarity
+    // Note: MySQL uses CAST(field AS SIGNED), PostgreSQL uses field::integer
+    $cast_sql = ($db_type === 'pgsql') ? "od.product_id::integer" : "CAST(od.product_id AS SIGNED)";
+    
+    $sql_top = "SELECT pd.name, 
+                       SUM(od.quantity) AS total_sold, 
+                       SUM(od.quantity * od.price) AS total_revenue
+                FROM order_details od
+                INNER JOIN product_details pd ON $cast_sql = pd.product_id
+                WHERE pd.seller_id = :id
+                GROUP BY pd.name, pd.product_id
+                ORDER BY total_sold DESC
+                LIMIT 5";
+    // Force cast to integer if product_id is varchar in table (as seen in some schema versions)
+    
+    $stmt_top = $conn->prepare($sql_top);
+    $stmt_top->execute(['id' => $seller_id]);
+    $top_products = $stmt_top->fetchAll();
 
-$result = $conn->query($sql);
+    // Query to fetch seller photo
+    $stmt_photo = $conn->prepare("SELECT photo FROM seller_details WHERE seller_id = :id");
+    $stmt_photo->execute(['id' => $seller_id]);
+    $row_img = $stmt_photo->fetch();
 
-$sql = "SELECT photo FROM seller_details WHERE seller_id = '$seller_id'";
-$result_img = mysqli_query($conn, $sql);
-
-if (mysqli_num_rows($result_img) > 0) {
-    // Fetch photo path
-    $row = mysqli_fetch_assoc($result_img);
+} catch (PDOException $e) {
+    die("Error fetching dashboard data: " . $e->getMessage());
 }
 
 ?>
@@ -87,11 +100,10 @@ if (mysqli_num_rows($result_img) > 0) {
             <div class="col-div-6">
                 <div class="profile">
                 <?php
-                    $image = empty($row['photo']) ? '../images/profile.jpg' : '../images/' . $row['photo'];
+                    $image = (!empty($row_img) && !empty($row_img['photo'])) ? '../images/' . $row_img['photo'] : '../images/profile.jpg';
                     echo "<td><img src='$image' class='pro-img'></td>";
                 ?>
-                    <!-- <img src="images/user.png" class="pro-img" /> -->
-                    <p><?php echo $seller_username; ?></p>
+                    <p><?php echo htmlspecialchars($seller_username); ?></p>
                 </div>
             </div>
             <div class="clearfix"></div>
@@ -101,7 +113,7 @@ if (mysqli_num_rows($result_img) > 0) {
 
         <div class="col-div-3">
             <div class="box">
-                <p><?php echo ($total_sales !== null) ? $total_sales : '0'; ?><br /><span>Total Sales</span></p>
+                <p><?php echo number_format($total_sales); ?><br /><span>Total Sales</span></p>
                 <i class="fa-solid fa-cart-shopping"></i>
             </div>
         </div>
@@ -132,13 +144,12 @@ if (mysqli_num_rows($result_img) > 0) {
             <th>Total Revenue</th>
         </tr>
         <?php
-        if ($result->num_rows > 0) {
-            // Output data of each row using a while loop
-            while($row = $result->fetch_assoc()) {
+        if (count($top_products) > 0) {
+            foreach($top_products as $row) {
                 echo "<tr>
-                        <td>" . $row["name"] . "</td>
+                        <td>" . htmlspecialchars($row["name"]) . "</td>
                         <td>" . $row["total_sold"] . "</td>
-                        <td>" . $row["total_revenue"] . "</td>
+                        <td>" . number_format($row["total_revenue"]) . "</td>
                       </tr>";
             }
         } else {
@@ -149,25 +160,6 @@ if (mysqli_num_rows($result_img) > 0) {
                 </div>
             </div>
         </div>
-
-        <!-- <div class="col-div-4">
-            <div class="box-4">
-                <div class="content">
-                    <p>Total Sale</p>
-                    <div class="circle-wrap">
-                        <div class="circle">
-                            <div class="mask full">
-                                <div class="fill"></div>
-                            </div>
-                            <div class="mask half">
-                                <div class="fill"></div>
-                            </div>
-                            <div class="inside-circle"> 10% </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div> -->
 
         <div class="clearfix"></div>
     </div>

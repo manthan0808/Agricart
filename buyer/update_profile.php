@@ -6,19 +6,33 @@ include("../session/session_check.php");
 if(isset($_POST['save_profile'])) {
     $username = $_SESSION['username'];
 
-    $full_name = mysqli_real_escape_string($conn, $_POST['first_name']);
-    $contact_no = mysqli_real_escape_string($conn, $_POST['contact_no']);
-    $email = mysqli_real_escape_string($conn, $_POST['email']);
-    $address = mysqli_real_escape_string($conn, $_POST['address']);
-    $state = mysqli_real_escape_string($conn, $_POST['state']);
-    $pincode = mysqli_real_escape_string($conn, $_POST['pin_code']);
+    $full_name = $_POST['first_name'];
+    $contact_no = !empty($_POST['contact_no']) ? (int)$_POST['contact_no'] : 0;
+    $email = $_POST['email']; // Note: This is readonly in the form but sent anyway
+    $address = $_POST['address'];
+    $state = $_POST['state'];
+    $pincode = !empty($_POST['pin_code']) ? (int)$_POST['pin_code'] : 0;
 
-    $query = "UPDATE buyer_details SET full_name='$full_name', contact_no='$contact_no', email='$email', address='$address', pin_code='$pincode' , state='$state' WHERE email = '$username'";
-    if(mysqli_query($conn, $query)) {
-        header("Location: profile.php?alert=profile_update");
-    } else {
-        // Error occurred
-        // Redirect to profile page or show an error message
+    try {
+        $stmt_update = $conn->prepare("UPDATE buyer_details SET full_name = :full_name, contact_no = :contact_no, address = :address, pin_code = :pincode, state = :state WHERE email = :email");
+        $run_update = $stmt_update->execute([
+            'full_name' => $full_name,
+            'contact_no' => $contact_no,
+            'address' => $address,
+            'pincode' => $pincode,
+            'state' => $state,
+            'email' => $username
+        ]);
+
+        if($run_update) {
+            header("Location: profile.php?alert=profile_update");
+            exit();
+        } else {
+            header("Location: profile.php?alert=update_error");
+            exit();
+        }
+    } catch (PDOException $e) {
+        die("Update failed: " . $e->getMessage());
     }
 }
 ?>

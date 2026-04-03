@@ -3,29 +3,33 @@ include("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
+try {
+    // Ordering randomly and limiting to 8 products
+    // Note: MySQL uses RAND(), PostgreSQL uses RANDOM()
+    $random_func = ($db_type === 'pgsql') ? 'RANDOM()' : 'RAND()';
+    $query = "SELECT * FROM product_details ORDER BY $random_func LIMIT 8"; 
+    $stmt_products = $conn->query($query);
+    $products = $stmt_products->fetchAll();
 
-$query = "SELECT * FROM product_details ORDER BY RAND() LIMIT 8"; // Ordering randomly and limiting to 8 products
-$result = mysqli_query($conn, $query);
-if(isset($_SESSION['username'])) {
-    $username = $_SESSION['username'];
+    $row = ['product_count' => 0]; // Default
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
-    // echo $buyer_id;
-$cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-$result = $conn->query($cartcount);
+    if(isset($_SESSION['username'])) {
+        $username = $_SESSION['username'];
 
-// Check if the query executed successfully
-if ($result) {
-    // Fetch the result
-    $row = $result->fetch_assoc();
-}
-
-
-
-
+        $stmt_buyer = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+        $stmt_buyer->execute(['email' => $username]);
+        $buyer_id_row = $stmt_buyer->fetch();
+        
+        if ($buyer_id_row) {
+            $buyer_id = $buyer_id_row['buyer_id'];
+            
+            $stmt_cart = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id");
+            $stmt_cart->execute(['id' => $buyer_id]);
+            $row = $stmt_cart->fetch();
+        }
+    }
+} catch (PDOException $e) {
+    die("Error fetching data: " . $e->getMessage());
 }
 ?>
 <!DOCTYPE html>
@@ -58,7 +62,7 @@ if ($result) {
             <li class="icon">
                 <div class="cart">
                     <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                    <?php if ($row['product_count'] > 0): ?>
+                    <?php if (isset($row['product_count']) && $row['product_count'] > 0): ?>
                         <sup><?php echo $row['product_count']; ?></sup>
                     <?php endif; ?>
 
@@ -69,7 +73,7 @@ if ($result) {
                 <a href="profile.php"><ion-icon name="person-circle-outline"></ion-icon> Profile</a>
                 <a href="order.php"><ion-icon name="cube-outline"></ion-icon> Orders</a>
                 <a href="../login/logout.php"><ion-icon name="log-out-outline"></ion-icon> Log Out</a>
-            </div>
+            </div>
             </li>
         </ul>
     </div>

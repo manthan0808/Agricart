@@ -1,31 +1,29 @@
 <?php
-include ("..\..\database\connection.php");
+include ("../../database/connection.php");
 
-// Fetch data from the seller_details table
-$query = "select * from seller_details";
-$result = mysqli_query($conn, $query);
+try {
+    $stmt = $conn->query("SELECT * FROM seller_details");
+    $sellers = $stmt->fetchAll();
 
-// Generate CSV content
-$csvContent = "First Name,Last Name,Photo,Email,Contact,Government ID,GST Number,Created On,Account Status, Verification Status\n";
+    $csvContent = "First Name,Last Name,Email,Contact,Government ID,GST Number,Created On,Account Status,Verification Status\n";
 
-while ($row = mysqli_fetch_assoc($result)) {
-    $photoFilename = $row['photo'];
-    $photoUri = "../../images/" . $photoFilename;
-    $status = ($row['status'] == 0) ? "active" : "disabled";
-    $verify = ($row['verify'] == 0) ? "verify" : "completed";
-    $gst = ($row['gst_no'] == 0) ? "------" : $row['gst_no'];
-    $csvContent .= "{$row['first_name']},{$row['last_name']},{$photoUri},{$row['email']},{$row['contact_no']},{$row['government_id']},{$gst},{$row['created_on']},{$status},{$verify}\n";
+    foreach ($sellers as $row) {
+        $first_name = str_replace('"', '""', $row['first_name'] ?? '');
+        $last_name = str_replace('"', '""', $row['last_name'] ?? '');
+        $status = ($row['status'] == 0) ? "Active" : "Inactive";
+        $verify = ($row['verify'] == 0) ? "Unverified" : "Verified";
+        $gst = ($row['gst_no'] == 0) ? "-" : $row['gst_no'];
+        
+        $csvContent .= "\"{$first_name}\",\"{$last_name}\",{$row['email']},{$row['contact_no']},\"{$row['government_id']}\",{$gst},{$row['created_on']},{$status},{$verify}\n";
+    }
+
+    header('Content-Type: text/csv');
+    header('Content-Disposition: attachment; filename="seller_details.csv"');
+    echo $csvContent;
+
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
-
-// Set headers for CSV download
-header('Content-Type: text/csv');
-header('Content-Disposition: attachment; filename="seller_details.csv"');
-
-// Output CSV content
-echo $csvContent;
-
-// Close the database connection
-mysqli_close($conn);
 ?>
 
 

@@ -3,45 +3,49 @@ include ("../session/session_start.php");
 include("../session/session_check.php");
 include("../database/connection.php");
 
-if(isset($_SESSION['username'])) {
+try {
     $username = $_SESSION['username'];
+    $buyer_id = null;
+    $orders = [];
+    $cart_row = ['product_count' => 0];
 
-    $buyer_id_query = "SELECT buyer_id FROM buyer_details WHERE email = '$username'";
-    $buyer_id_result = mysqli_query($conn, $buyer_id_query);
-    $buyer_id_row = mysqli_fetch_assoc($buyer_id_result);
-    $buyer_id = $buyer_id_row['buyer_id'];
+    // Fetch buyer_id
+    $stmt_id = $conn->prepare("SELECT buyer_id FROM buyer_details WHERE email = :email");
+    $stmt_id->execute(['email' => $username]);
+    $id_row = $stmt_id->fetch();
+    
+    if ($id_row) {
+        $buyer_id = $id_row['buyer_id'];
 
-    // Fetch order details for the specific buyer
-    $order_query = "SELECT o.*, p.name AS name, p.photo AS photo, s.first_name AS first_name, 
-                s.last_name AS last_name, by.address AS address, by.state AS state, by.pin_code AS pin_code
-                FROM order_details o
-                INNER JOIN buyer_details `by` ON o.buyer_id = `by`.buyer_id
-                INNER JOIN product_details p ON o.product_id = p.product_id
-                INNER JOIN seller_details s ON o.seller_id = s.seller_id
-                WHERE o.buyer_id = '$buyer_id'";
+        // Fetch order details for the specific buyer
+        // Using "buyer_tbl" instead of "by" to avoid reserved word conflicts in some SQL flavors
+        $order_query = "SELECT o.*, p.name AS name, p.photo AS photo, s.first_name AS first_name, 
+                    s.last_name AS last_name, bt.address AS address, bt.state AS state, bt.pin_code AS pin_code
+                    FROM order_details o
+                    INNER JOIN buyer_details bt ON o.buyer_id = bt.buyer_id
+                    INNER JOIN product_details p ON o.product_id = p.product_id
+                    INNER JOIN seller_details s ON o.seller_id = s.seller_id
+                    WHERE o.buyer_id = :buyer_id";
 
-    $order_result = mysqli_query($conn, $order_query);
-    $cartcount= "SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = $buyer_id";
-    $result_count = $conn->query($cartcount);
+        $stmt_orders = $conn->prepare($order_query);
+        $stmt_orders->execute(['buyer_id' => $buyer_id]);
+        $orders = $stmt_orders->fetchAll();
 
-// Check if the query executed successfully
-    if ($result_count) {
-    // Fetch the result
-    $row = $result_count->fetch_assoc();
+        // Fetch cart count
+        $stmt_count = $conn->prepare("SELECT COUNT(*) AS product_count FROM cart_details WHERE buyer_id = :id");
+        $stmt_count->execute(['id' => $buyer_id]);
+        $cart_row = $stmt_count->fetch();
     }
+} catch (PDOException $e) {
+    die("Database error: " . $e->getMessage());
 }
 
 function generateAndDownloadInvoice($order_id) {
-    
     header("Content-Type: application/pdf");
     header("Content-Disposition: attachment; filename='invoice.pdf'");
-
-    
     echo "Sample PDF content for order ID: $order_id";
     exit; 
 }
-
-
 
 ?>
 
@@ -50,7 +54,7 @@ function generateAndDownloadInvoice($order_id) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgriCart</title>
+    <title>Order History</title>
     <link rel="stylesheet" href="home.css">
     <link rel="icon" href="../images/titlelogo.png" type="image/x-icon">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, shrink-to-fit=no">
@@ -73,8 +77,8 @@ function generateAndDownloadInvoice($order_id) {
                     <li class="icon">
                         <div class="cart">
                             <a href="cart.php"><ion-icon name="cart-outline"></ion-icon></a>
-                            <?php if ($row['product_count'] > 0): ?>
-                        <sup><?php echo $row['product_count']; ?></sup>
+                            <?php if (isset($cart_row['product_count']) && $cart_row['product_count'] > 0): ?>
+                        <sup><?php echo $cart_row['product_count']; ?></sup>
                     <?php endif; ?>
                         </div>
                     </li>
@@ -107,10 +111,11 @@ function generateAndDownloadInvoice($order_id) {
             </thead>
             <tbody>
                 <?php
-                while ($order_row = mysqli_fetch_assoc($order_result)) {
+                if (!empty($orders)) {
+                    foreach ($orders as $order_row) {
                 ?>
                 <tr>
-                    <td><?php echo $order_row['name']; ?></td>
+                    <td><?php echo htmlspecialchars($order_row['name']); ?></td>
                     <td><?php $image = empty($order_row['photo']) ? '../images/profile.jpg' : '../images/' . $order_row['photo'];
                             echo "<img src='$image'>";
                         ?>
@@ -125,7 +130,7 @@ function generateAndDownloadInvoice($order_id) {
 
                                 <h2>Order Details</h2><br>
                                 <form class="scrollable-form">
-                                    <div class="details"><b>Name : </b><?php echo $order_row['name']; ?></div><br>
+                                    <div class="details"><b>Name : </b><?php echo htmlspecialchars($order_row['name']); ?></div><br>
                                     <div class="details"><?php $image = empty($order_row['photo']) ? '../images/profile.jpg' : '../images/' . $order_row['photo'];
                                                             echo "<img src='$image'>";
                                                         ?>
@@ -133,22 +138,22 @@ function generateAndDownloadInvoice($order_id) {
                                     <div class="details"><b>Price : </b> ₹<?php echo $order_row['price']; ?></div>
                                     <div class="details"><b>Quantity : </b><?php echo $order_row['quantity']; ?></div>
                                     <div class="details"><b>Order Date : </b><?php echo $order_row['order_date']; ?></div>
-                                    <div class="details"><b>Delivery Address : </b><?php echo $order_row['address']; ?></div>
-                                    <div class="details"><b>State : </b><?php echo $order_row['state']; ?></div>
-                                    <div class="details"><b>Pin code : </b><?php echo $order_row['pin_code']; ?></div>
+                                    <div class="details"><b>Delivery Address : </b><?php echo htmlspecialchars($order_row['address']); ?></div>
+                                    <div class="details"><b>State : </b><?php echo htmlspecialchars($order_row['state']); ?></div>
+                                    <div class="details"><b>Pin code : </b><?php echo htmlspecialchars($order_row['pin_code']); ?></div>
                                     <div class="details"><b>Payment Type : </b><?php if($order_row['payment'] == 0){echo "cash";}else{echo "online";} ?></div>
                                     <div class="details"><b>Shipping Charges : </b><?php if($order_row['price'] < 150){echo "20";}else{echo"Free";} ?></div>
                                     <?php
                                         $totalPrice = $order_row['price'] * $order_row['quantity'];
                                         if ($totalPrice < 150) {
-                                            $totalPrice += 20; // Add shipping charge if applicable
+                                            $totalPrice += 20; 
                                         }
                                     ?>
                                     <div class="details"><b>Total Amount : </b> ₹<?php echo $totalPrice; ?></div>
                                     <div class="details"><b>Status : </b><?php if($order_row['status'] == 0){echo "Pending";}else{ echo "Shipped";} ?></div>
-                                    <div class="details"><b>Tracking Id : </b><?php echo $order_row['tracking_no']; ?></div>
-                                    <div class="details"><b>Seller Name : </b><?php echo $order_row['first_name'] . ' ' . $order_row['last_name']; ?></div><br>
-                                    <div class="details_button"><button class="hello">Invoice</button></div>
+                                    <div class="details"><b>Tracking Id : </b><?php echo htmlspecialchars($order_row['tracking_no']); ?></div>
+                                    <div class="details"><b>Seller Name : </b><?php echo htmlspecialchars($order_row['first_name'] . ' ' . $order_row['last_name']); ?></div><br>
+                                    <div class="details_button"><button type="button" class="hello" onclick="downloadInvoice(<?php echo $order_row['order_id']; ?>)">Invoice</button></div>
                                 </form>
                             </div>
                         </div>
@@ -157,6 +162,9 @@ function generateAndDownloadInvoice($order_id) {
                     <td><button class="hello" onclick="downloadInvoice(<?php echo $order_row['order_id']; ?>)">Download</button></td>
                 </tr>
                 <?php
+                    }
+                } else {
+                    echo "<tr><td colspan='6'>No orders found</td></tr>";
                 }
                 ?>
             </tbody>
@@ -171,19 +179,12 @@ function generateAndDownloadInvoice($order_id) {
     function closePopup(orderId) {
         document.getElementById("overlay_" + orderId).style.display = "none";
     }
+    function downloadInvoice(orderId) {
+        window.location.href = "../pdf_makker/generatePDF.php?order_id=" + orderId;
+    }
     </script>
-    <script>
-        function downloadInvoice(orderId) {
-            // Invoke PHP script to generate and download PDF invoice
-            window.location.href = "../pdf_makker/generatePDF.php?order_id=" + orderId;
-        }
-    </script>
-
-
     <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
     <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 </body>
-<?php
-include ("footer.php");
-?>
+<?php include ("footer.php"); ?>
 </html>
