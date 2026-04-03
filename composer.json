@@ -1,0 +1,7 @@
+{
+  "name": "manthan0808/agricart",
+  "description": "Agricart Agriculture E-Commerce Platform",
+  "require": {
+    "php": ">=8.0"
+  }
+}
