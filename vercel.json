@@ -1,22 +1,22 @@
 {
   "functions": {
     "api/**/*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     },
     "*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     },
     "buyer/**/*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     },
     "seller/**/*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     },
     "login/**/*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     },
     "admin/**/*.php": {
-      "runtime": "vercel-php@latest"
+      "runtime": "vercel-php@0.6.0"
     }
   },
   "routes": [
