@@ -4,17 +4,10 @@
       "runtime": "vercel-php@0.7.3"
     }
   },
-  "routes": [
+  "rewrites": [
     {
-      "src": "/",
-      "dest": "/login/login.php"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/$1"
+      "source": "/",
+      "destination": "/login/login.php"
     }
-  ],
-  "env": {
-    "DB_TYPE": "pgsql"
-  }
+  ]
 }
