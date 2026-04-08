@@ -14,3 +14,7 @@ Thumbs.db
 # OS generated files
 ehthumbs.db
 Icon?
+
+# Local environment
+php/
+start.bat
