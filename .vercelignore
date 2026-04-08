@@ -1,0 +1,11 @@
+# Ignore local PHP binaries and tools
+php/
+start.bat
+.vscode/
+
+# Ignore database credentials
+.env
+
+# Ignore OS files
+.DS_Store
+Thumbs.db

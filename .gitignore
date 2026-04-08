@@ -1,5 +1,5 @@
 # Database credentials and configuration
-database/connection.php
+.env
 
 # PHP & Server temp files
 *.log
