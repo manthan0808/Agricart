@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Local dev files
+php/
+start.bat
+.vscode/
+.env
+
+# Vercel-specific (not needed in Docker)
+vercel.json
+.vercelignore
+
+# Database exports (not needed at runtime)
+database/*.sql
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
